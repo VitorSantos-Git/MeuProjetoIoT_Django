@@ -6,6 +6,11 @@ from django.utils import timezone
 from datetime import datetime 
 
 
+@admin.register(LeituraSensor)
+class LeituraSensor(admin.ModelAdmin):
+    list_display = ('dispositivo', 'temperatura', 'umidade', 'timestamp')
+    search_fields = ('nome',)
+
 # Registre o modelo Dispositivo se ainda não o fez
 @admin.register(Dispositivo)
 class DispositivoAdmin(admin.ModelAdmin):
