@@ -8,6 +8,7 @@ from .models import Dispositivo, LeituraSensor, ComandoPendente # Importe o novo
 from django.utils import timezone # Importe timezone para timestamps
 from django.contrib import messages # Importe messages para feedback ao usuário
 from datetime import datetime, timedelta, date
+from django.utils.timezone import get_current_timezone
 import pytz     
 from django.conf import settings 
 
@@ -183,14 +184,16 @@ def gerenciar_dispositivos(request, device_name=None): # device_name agora pode 
             try:
                 # O input datetime-local no HTML já fornece no formato ISO 8601 (YYYY-MM-DDTHH:MM), 
                 # que pode ser lido diretamente pelo datetime.fromisoformat
+                data_execucao_str = request.POST.get('data_execucao')
                 data_execucao_naive = datetime.fromisoformat(data_execucao_str)
                 
                 # Obtém o fuso horário atual do Django (configurado em settings.py)
                 current_tz = pytz.timezone(settings.TIME_ZONE) 
                 
                 # Torna a data/hora ciente do fuso horário
-                data_execucao_aware = current_tz.localize(data_execucao_naive)
+                data_execucao_aware = timezone.make_aware(data_execucao_naive, timezone.get_current_timezone())
 
+          
                 # Validar se a data agendada não é no passado
                 if data_execucao_aware < timezone.now():
                     feedback_message = "Erro: A data e hora de execução não podem ser no passado."
