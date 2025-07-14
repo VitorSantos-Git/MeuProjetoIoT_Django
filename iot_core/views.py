@@ -1,11 +1,12 @@
 # iot_core/views.py
 
-from django.shortcuts import render, get_object_or_404 # Importe get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect # Importe get_object_or_404
 from django.http import HttpResponse, JsonResponse # Importe JsonResponse
 from django.views.decorators.csrf import csrf_exempt # Para desabilitar o CSRF temporariamente para a API
 import json # Para lidar com JSON
 from .models import Dispositivo, LeituraSensor, ComandoPendente # Importe o novo modelo LeituraSensor
-from django.utils import timezone # Importe timezone para timestamps precisos
+from django.utils import timezone # Importe timezone para timestamps
+from django.contrib import messages # Importe messages para feedback ao usuário
 
 # Esta view retorna uma resposta HTTP simples.
 def home(request):
@@ -100,3 +101,61 @@ def enviar_comando_dispositivo(request, device_name):
         # Não há comandos pendentes para este dispositivo
         print(f"Nenhum comando pendente para o dispositivo '{dispositivo.nome}'.")
         return JsonResponse({"status": "sucesso", "comando": "NENHUM_COMANDO", "dispositivo": dispositivo.nome}, status=200)
+    
+
+def gerenciar_dispositivos(request):
+    # Esta view vai lidar tanto com a exibição quanto com o envio de comandos
+    if request.method == 'POST':
+        device_id = request.POST.get('device_id')
+        comando_texto = request.POST.get('comando')
+        parametros_json = request.POST.get('parametros', '{}') # Pega parâmetros, default para JSON vazio
+
+        if not parametros_json:
+            parametros_json = '{}'
+
+        dispositivo = get_object_or_404(Dispositivo, id=device_id)
+
+        try:
+            # Tenta analisar os parâmetros como JSON
+            parametros_parsed = json.loads(parametros_json)
+            # Verifica se é um dicionário para garantir que pode ser salvo como JSON
+            if not isinstance(parametros_parsed, dict):
+                raise ValueError("Parâmetros devem ser um JSON válido (objeto).")
+
+            ComandoPendente.objects.create(
+                dispositivo=dispositivo,
+                comando=comando_texto,
+                parametros=json.dumps(parametros_parsed) # Salva como string JSON
+            )
+            messages.success(request, f"Comando '{comando_texto}' agendado para '{dispositivo.nome}' com sucesso!")
+        except json.JSONDecodeError:
+            messages.error(request, "Erro: Parâmetros JSON inválidos.")
+        except ValueError as e:
+            messages.error(request, f"Erro: {e}")
+        except Exception as e:
+            messages.error(request, f"Ocorreu um erro ao agendar o comando: {e}")
+
+        return redirect('gerenciar_dispositivos') # Redireciona para evitar reenvio do formulário
+
+    # Para requisições GET (exibição da página)
+    dispositivos = Dispositivo.objects.all().order_by('nome')
+    leituras_recentes = {}
+    for disp in dispositivos:
+        # Pega a leitura mais recente de cada dispositivo
+        leitura = LeituraSensor.objects.filter(dispositivo=disp).order_by('-timestamp').first()
+        leituras_recentes[disp.id] = leitura
+
+    comandos_pendentes_por_dispositivo = {}
+    for disp in dispositivos:
+        # Pega os comandos pendentes de cada dispositivo
+        comandos = ComandoPendente.objects.filter(dispositivo=disp, executado=False).order_by('data_criacao')
+        comandos_pendentes_por_dispositivo[disp.id] = comandos
+
+
+    context = {
+        'dispositivos': dispositivos,
+        'leituras_recentes': leituras_recentes,
+        'comandos_pendentes': comandos_pendentes_por_dispositivo,
+    }
+    return render(request, 'iot_core/gerenciar_dispositivos.html', context)
+
