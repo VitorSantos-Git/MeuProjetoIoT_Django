@@ -1,109 +1,75 @@
-<!DOCTYPE html>
-{% load iot_filters %}
-<html lang="pt-br">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gerenciar Dispositivos IoT</title>
-    <style>
-        body { font-family: Arial, sans-serif; margin: 20px; background-color: #f4f4f4; color: #333; }
-        h1, h2 { color: #0056b3; }
-        .container { max-width: 900px; margin: 0 auto; background-color: #fff; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .device-card { border: 1px solid #ddd; border-radius: 5px; padding: 15px; margin-bottom: 20px; background-color: #f9f9f9; }
-        .device-card h3 { margin-top: 0; color: #333; }
-        .device-card p { margin-bottom: 5px; }
-        .form-container { margin-top: 15px; padding: 10px; border-top: 1px dashed #eee; }
-        .form-container label { display: block; margin-bottom: 5px; font-weight: bold; }
-        .form-container input[type="text"], .form-container textarea {
-            width: calc(100% - 22px);
-            padding: 10px;
-            margin-bottom: 10px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        .form-container button {
-            background-color: #28a745;
-            color: white;
-            padding: 10px 15px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
-        }
-        .form-container button:hover { background-color: #218838; }
-        .messages { list-style: none; padding: 0; margin-bottom: 20px; }
-        .messages li { padding: 10px 15px; margin-bottom: 10px; border-radius: 5px; }
-        .messages .success { background-color: #d4edda; color: #155724; border-color: #c3e6cb; }
-        .messages .error { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; }
-        .command-list { list-style: none; padding-left: 20px; margin-top: 10px; }
-        .command-list li { margin-bottom: 5px; color: #555; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Gerenciar Dispositivos IoT</h1>
+{% extends 'base.html' %} {# <--- ESSA LINHA DIZ QUE ESTE TEMPLATE HERDA DE base.html #}
+{% load iot_filters %}   {# Mantenha esta linha para carregar seus filtros customizados #}
 
-        <ul class="messages">
-            {% if messages %}
-                {% for message in messages %}
-                    <li {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-                {% endfor %}
-            {% endif %}
-        </ul>
+{% block title %}Gerenciar Dispositivos IoT{% endblock %} {# Define o título para esta página #}
 
-        {% if dispositivos %}
-            {% for dispositivo in dispositivos %}
-                <div class="device-card">
-                    <h3>{{ dispositivo.nome }}</h3>
-                    <p><strong>Descrição:</strong> {{ dispositivo.descricao|default:"N/A" }}</p>
-                    <p><strong>Endereço IP:</strong> {{ dispositivo.ip_endereco }}:{{ dispositivo.porta }}</p>
-                    <p><strong>Ativo:</strong> {{ dispositivo.ativo|yesno:"Sim,Não" }}</p>
-                    <p><strong>Última Atualização:</strong> {{ dispositivo.ultima_atualizacao|date:"d/m/Y H:i:s" }}</p>
+{% block content %} {# <--- TUDO AQUI DENTRO SERÁ COLOCADO NO 'main-content' DO base.html #}
 
-                    <h4>Leitura Mais Recente:</h4>
-                    {% with leitura=leituras_recentes|get_item:dispositivo.id %}
-                        {% if leitura %}
-                            <p><strong>Temperatura:</strong> {{ leitura.temperatura }}°C</p>
-                            <p><strong>Umidade:</strong> {{ leitura.umidade }}%</p>
-                            <p><strong>Recebido em:</strong> {{ leitura.timestamp|date:"d/m/Y H:i:s" }}</p>
-                        {% else %}
-                            <p>Nenhuma leitura recente disponível.</p>
-                        {% endif %}
-                    {% endwith %}
+    <h1>Gerenciar Dispositivos IoT</h1>
 
-                    <h4>Comandos Pendentes:</h4>
-                    {% with comandos=comandos_pendentes|get_item:dispositivo.id %}
-                        {% if comandos %}
-                            <ul class="command-list">
-                                {% for comando in comandos %}
-                                    <li>{{ comando.comando }} (Criado em: {{ comando.data_criacao|date:"d/m/Y H:i:s" }})</li>
-                                {% endfor %}
-                            </ul>
-                        {% else %}
-                            <p>Nenhum comando pendente.</p>
-                        {% endif %}
-                    {% endwith %}
-
-                    <div class="form-container">
-                        <h4>Agendar Novo Comando para {{ dispositivo.nome }}:</h4>
-                        <form method="post">
-                            {% csrf_token %}
-                            <input type="hidden" name="device_id" value="{{ dispositivo.id }}">
-
-                            <label for="comando-{{ dispositivo.id }}">Comando (ex: LIGAR_AR, BUZZER_ON):</label>
-                            <input type="text" id="comando-{{ dispositivo.id }}" name="comando" required>
-
-                            <label for="parametros-{{ dispositivo.id }}">Parâmetros (JSON opcional, ex: {"temperatura": 22}):</label>
-                            <textarea id="parametros-{{ dispositivo.id }}" name="parametros" rows="2" placeholder="{}"></textarea>
-
-                            <button type="submit">Agendar Comando</button>
-                        </form>
-                    </div>
-                </div>
+    {# As mensagens já estão no base.html, então REMOVA ESTE BLOCO SE ESTIVER AQUI #}
+    {#
+    <ul class="messages">
+        {% if messages %}
+            {% for message in message %}
+                <li {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
             {% endfor %}
-        {% else %}
-            <p>Nenhum dispositivo cadastrado.</p>
         {% endif %}
-    </div>
-</body>
-</html>
+    </ul>
+    #}
+
+    {% if dispositivos %}
+        {% for dispositivo in dispositivos %}
+            <div class="device-card">
+                <h3>{{ dispositivo.nome }}</h3>
+                <p><strong>Descrição:</strong> {{ dispositivo.descricao|default:"N/A" }}</p>
+                <p><strong>Endereço IP:</strong> {{ dispositivo.ip_endereco }}:{{ dispositivo.porta }}</p>
+                <p><strong>Ativo:</strong> {{ dispositivo.ativo|yesno:"Sim,Não" }}</p>
+                <p><strong>Última Atualização:</strong> {{ dispositivo.ultima_atualizacao|date:"d/m/Y H:i:s" }}</p>
+
+                <h4>Leitura Mais Recente:</h4>
+                {% with leitura=leituras_recentes|get_item:dispositivo.id %}
+                    {% if leitura %}
+                        <p><strong>Temperatura:</strong> {{ leitura.temperatura }}°C</p>
+                        <p><strong>Umidade:</strong> {{ leitura.umidade }}%</p>
+                        <p><strong>Recebido em:</strong> {{ leitura.timestamp|date:"d/m/Y H:i:s" }}</p>
+                    {% else %}
+                        <p>Nenhuma leitura recente disponível.</p>
+                    {% endif %}
+                {% endwith %}
+
+                <h4>Comandos Pendentes:</h4>
+                {% with comandos=comandos_pendentes|get_item:dispositivo.id %}
+                    {% if comandos %}
+                        <ul class="command-list">
+                            {% for comando in comandos %}
+                                <li>{{ comando.comando }} (Criado em: {{ comando.data_criacao|date:"d/m/Y H:i:s" }})</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p>Nenhum comando pendente.</p>
+                    {% endif %}
+                {% endwith %}
+
+                <div class="form-container">
+                    <h4>Agendar Novo Comando para {{ dispositivo.nome }}:</h4>
+                    <form method="post">
+                        {% csrf_token %}
+                        <input type="hidden" name="device_id" value="{{ dispositivo.id }}">
+
+                        <label for="comando-{{ dispositivo.id }}">Comando (ex: LIGAR_AR, BUZZER_ON):</label>
+                        <input type="text" id="comando-{{ dispositivo.id }}" name="comando" required>
+
+                        <label for="parametros-{{ dispositivo.id }}">Parâmetros (JSON opcional, ex: {"temperatura": 22}):</label>
+                        <textarea id="parametros-{{ dispositivo.id }}" name="parametros" rows="2" placeholder="{}"></textarea>
+
+                        <button type="submit">Agendar Comando</button>
+                    </form>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p>Nenhum dispositivo cadastrado.</p>
+    {% endif %}
+
+{% endblock content %} {# <--- FIM DO BLOCO DE CONTEÚDO #}
