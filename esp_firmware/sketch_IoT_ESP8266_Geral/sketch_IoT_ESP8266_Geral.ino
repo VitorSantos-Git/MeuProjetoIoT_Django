@@ -68,6 +68,10 @@ const int btnVentilacaoPin = D7; // Pino do botão Ventilação (GPIO13)
 unsigned long lastSendMillis = 0;
 const long sendInterval = 30000; // Enviar dados a cada 30 segundos
 
+// --- VARIÁVEL: para controlar o intervalo de verificação de comandos ---
+unsigned long lastCommandCheckMillis = 0;
+const long commandCheckInterval = 5000; // Verificar comandos a cada 5 segundos
+
 void setup() {
   Serial.begin(115200);
   delay(10);
@@ -105,6 +109,15 @@ void setup() {
 
 void loop() {
 
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi Desconectado. Tentando reconectar...");
+    WiFi.begin(ssid, password);
+    // Não usar delay(5000) ou restart aqui. O loop continuará e tentará reconectar.
+    // Você pode adicionar um pequeno delay para não ficar spamando a conexão
+    delay(1000); 
+    return; // Pula o resto do loop se não estiver conectado
+  }
+
   // --- Leitura e Envio de Dados do Sensor para o Django ---
   if (millis() - lastSendMillis > sendInterval) {
     float h = dht.readHumidity();
@@ -125,8 +138,11 @@ void loop() {
     lastSendMillis = millis();
   }
 
-  // --- Verificação de Comandos do Django ---
-  checkDjangoCommands();
+   // --- Verificação de Comandos do Django ---
+  if (millis() - lastCommandCheckMillis >= commandCheckInterval) {
+      checkDjangoCommands();
+      lastCommandCheckMillis = millis();
+  }
 
   // --- Leitura dos Botões e Envio de Comandos IR ---
   if (digitalRead(btnLigarPin) == LOW) { // Botão Ligar pressionado
@@ -137,7 +153,7 @@ void loop() {
       // Você precisará capturar esses códigos com um receptor IR
       irsend.sendRaw(rawData1, sizeof(rawData1) / sizeof(rawData1[0]), frequencia);// Comando raw Ligar
       tone(buzzerPin, 1000, 100); // Toca um bip curto
-      delay(500); // Pequeno atraso para evitar múltiplos disparos
+      while(digitalRead(btnLigarPin) == LOW); // Espera o botão ser solto
     }
   }
 
@@ -150,7 +166,7 @@ void loop() {
       // Você precisará capturar esses códigos com um receptor IR
       irsend.sendRaw(rawData2, sizeof(rawData2) / sizeof(rawData2[0]), frequencia); //comando Desliga
       tone(buzzerPin, 1000, 100);
-      delay(500);
+      while(digitalRead(btnDesligarPin) == LOW); // Espera o botão ser solto
     }
   }
 
@@ -163,12 +179,12 @@ void loop() {
       // Você precisará capturar esses códigos com um receptor IR
       irsend.sendRaw(rawData3, sizeof(rawData3) / sizeof(rawData3[0]), frequencia); //Comando Ventilação 
       tone(buzzerPin, 1000, 100);
-      delay(500);
+      while(digitalRead(btnVentilacaoPin) == LOW); // Espera o botão ser solto
     }
   }
 
 
-  delay(100); // Pequeno atraso para estabilidade
+  delay(50); // Pequeno atraso para estabilidade
 }
 
 // --- Funções Auxiliares ---
@@ -215,6 +231,10 @@ void sendSensorData(float temperature, float humidity) {
 }
 
 void checkDjangoCommands() {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi não conectado, não foi possível verificar comandos.");
+    return;
+  }
   WiFiClient client;
   HTTPClient http;
 
@@ -239,54 +259,107 @@ void checkDjangoCommands() {
     Serial.println(response);
 
     // Parseia a resposta JSON
-    StaticJsonDocument<200> doc;
+    StaticJsonDocument<500> doc;
     DeserializationError error = deserializeJson(doc, response);
 
     if (error) {
-      Serial.print("deserializeJson() falhou: ");
+      Serial.print(F("deserializeJson() falhou: "));
       Serial.println(error.c_str());
       return;
     }
 
-    String status = doc["status"];
-    String comandoRecebido = doc["comando"];
+   const char* status = doc["status"];
+    const char* comandoRecebido = doc["comando"];
+    int comando_id = doc["id_comando"] | 0; // Pega o ID do comando, 0 se não existir
 
-    if (status == "sucesso" && comandoRecebido != "CHECK_COMMANDS") { // Se recebeu um comando real
+    if (strcmp(status, "sucesso") == 0 && strcmp(comandoRecebido, "NENHUM_COMANDO") != 0) {
       Serial.print("Comando recebido do Django: ");
       Serial.println(comandoRecebido);
 
+      // Você pode querer usar os parâmetros também
+      // JsonObject parametros = doc["parametros"];
+      // if (parametros.containsKey("temperatura")) {
+      //   Serial.print("Temperatura nos parâmetros: ");
+      //   Serial.println(parametros["temperatura"].as<int>());
+      // }
+
       // --- Lógica para executar o comando recebido ---
-      if (comandoRecebido == "LIGAR_AR") {
-        // Substitua rawDatax
-        // Você precisará capturar esses códigos com um receptor IR
-        irsend.sendRaw(rawData1, sizeof(rawData1) / sizeof(rawData1[0]), frequencia);// Comando raw Ligar
+      if (strcmp(comandoRecebido, "LIGAR_AR") == 0) {
+        irsend.sendRaw(rawData1, sizeof(rawData1) / sizeof(rawData1[0]), frequencia);
         tone(buzzerPin, 1500, 200); // Bip de confirmação
         Serial.println("Comando LIGAR_AR executado.");
-      } else if (comandoRecebido == "DESLIGAR_AR") {
-        // Substitua rawDatax
-        // Você precisará capturar esses códigos com um receptor IR
-        irsend.sendRaw(rawData2, sizeof(rawData2) / sizeof(rawData2[0]), frequencia); //comando Desliga
+        enviarConfirmacaoComando(comando_id, "executado_sucesso");
+      } else if (strcmp(comandoRecebido, "DESLIGAR_AR") == 0) {
+        irsend.sendRaw(rawData2, sizeof(rawData2) / sizeof(rawData2[0]), frequencia);
         tone(buzzerPin, 1500, 200);
         Serial.println("Comando DESLIGAR_AR executado.");
-      } else if (comandoRecebido == "VENTILACAO_AR") {
-        // Substitua rawData1
-        // Você precisará capturar esses códigos com um receptor IR
-       irsend.sendRaw(rawData3, sizeof(rawData3) / sizeof(rawData3[0]), frequencia); //Comando Ventilação
+        enviarConfirmacaoComando(comando_id, "executado_sucesso");
+      } else if (strcmp(comandoRecebido, "VENTILACAO_AR") == 0) {
+        irsend.sendRaw(rawData3, sizeof(rawData3) / sizeof(rawData3[0]), frequencia);
         tone(buzzerPin, 1500, 200);
         Serial.println("Comando VENTILACAO_AR executado.");
-      } else if (comandoRecebido == "BUZZER_ON") {
+        enviarConfirmacaoComando(comando_id, "executado_sucesso");
+      } else if (strcmp(comandoRecebido, "BUZZER_ON") == 0) {
         digitalWrite(buzzerPin, HIGH);
         Serial.println("Buzzer Ligado.");
-      } else if (comandoRecebido == "BUZZER_OFF") {
+        enviarConfirmacaoComando(comando_id, "executado_sucesso");
+      } else if (strcmp(comandoRecebido, "BUZZER_OFF") == 0) {
         digitalWrite(buzzerPin, LOW);
         Serial.println("Buzzer Desligado.");
-      }
-      // Adicione mais comandos aqui conforme necessário
-    }else if (comandoRecebido == "NENHUM_COMANDO") {
+        enviarConfirmacaoComando(comando_id, "executado_sucesso");
+      } else {
+            Serial.print("Comando desconhecido: ");
+            Serial.println(comandoRecebido);
+            if (comando_id != 0) { // Se o comando não foi reconhecido, mas tinha ID, reporta falha
+                enviarConfirmacaoComando(comando_id, "executado_falha_comando_desconhecido");
+            }
+        }
+    } else if (strcmp(comandoRecebido, "NENHUM_COMANDO") == 0) {
         Serial.println("Nenhum comando pendente no Django.");
+    } else {
+        Serial.print("Status inesperado do Django: ");
+        Serial.println(status);
     }
   } else {
     Serial.printf("[HTTP] Erro na requisição de comando: %s\n", http.errorToString(httpResponseCode).c_str());
+  }
+  http.end();
+}
+
+// Função para enviar confirmação de comando para o Django
+void enviarConfirmacaoComando(int comandoId, const char* statusMsg) {
+  if (WiFi.status() != WL_CONNECTED) {
+    Serial.println("WiFi não conectado para enviar confirmação.");
+    return;
+  }
+  WiFiClient client;
+  HTTPClient http;
+
+  String url = "http://" + String(djangoHost) + ":" + String(djangoPort) + "/iot/comando/" + String(deviceName) + "/";
+  Serial.print("[HTTP] Enviando confirmação para: ");
+  Serial.println(url);
+
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+
+  StaticJsonDocument<200> doc; // Capacidade do JSON, ajuste se necessário
+  doc["comando_id"] = comandoId;
+  doc["status"] = statusMsg;
+
+  String requestBody;
+  serializeJson(doc, requestBody);
+
+  Serial.print("[HTTP] Corpo da requisição: ");
+  Serial.println(requestBody);
+
+  int httpResponseCode = http.POST(requestBody);
+
+  if (httpResponseCode > 0) {
+    Serial.printf("[HTTP] Código de Resposta de confirmação: %d\n", httpResponseCode);
+    String payload = http.getString();
+    Serial.println(payload);
+  } else {
+    Serial.printf("[HTTP] Erro ao enviar confirmação: %s\n", http.errorToString(httpResponseCode).c_str());
   }
   http.end();
 }

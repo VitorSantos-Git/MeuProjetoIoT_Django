@@ -7,6 +7,10 @@ import json # Para lidar com JSON
 from .models import Dispositivo, LeituraSensor, ComandoPendente # Importe o novo modelo LeituraSensor
 from django.utils import timezone # Importe timezone para timestamps
 from django.contrib import messages # Importe messages para feedback ao usuário
+import datetime #
+import pytz     
+from django.conf import settings 
+
 
 # Esta view retorna uma resposta HTTP simples.
 def home(request):
@@ -71,86 +75,129 @@ def receber_dados_sensor(request):
 # view para enviar comandos ao dispositivo
 @csrf_exempt # Também desabilitamos o CSRF aqui por ser uma API para o ESP8266
 def enviar_comando_dispositivo(request, device_name):
-    # O ESP8266 faz um GET para esta URL para ver se há comandos pendentes
-    # Busca o dispositivo pelo nome, ou retorna 404 se não encontrado
     dispositivo = get_object_or_404(Dispositivo, nome=device_name)
 
-    # Procura por um comando pendente (executado=False) para este dispositivo
-    comando_pendente = ComandoPendente.objects.filter(
-        dispositivo=dispositivo,
-        executado=False
-    ).order_by('data_criacao').first() # Pega o comando mais antigo (primeiro na fila)
+    if request.method == 'GET':
+        # ESP está pedindo um comando.
+        # Buscar o comando mais antigo (agendado ou não) que AINDA NÃO FOI EXECUTADO
+        # e cuja data/hora de execução agendada JÁ PASSOU ou É AGORA.
+        comando_pendente = ComandoPendente.objects.filter(
+            dispositivo=dispositivo,
+            executado=False,
+            data_execucao_agendada__lte=timezone.now() # <-- Nova condição: data agendada <= agora
+        ).order_by('data_execucao_agendada').first() # Pega o mais antigo primeiro
 
-    if comando_pendente:
-        # Encontrou um comando pendente, envia para o ESP e o marca como executado
-        comando_para_enviar = {
-            "status": "sucesso",
-            "comando": comando_pendente.comando,
-            "parametros": json.loads(comando_pendente.parametros) if comando_pendente.parametros else {},
-            "dispositivo": dispositivo.nome
-        }
-        print(f"Enviando comando '{comando_pendente.comando}' para o dispositivo '{dispositivo.nome}'")
+        if comando_pendente:
+            print(f"Enviando comando '{comando_pendente.comando}' para o dispositivo '{device_name}'")
+            response_data = {
+                "status": "sucesso",
+                "comando": comando_pendente.comando,
+                "parametros": json.loads(comando_pendente.parametros) if comando_pendente.parametros else {}, # Garante que seja um dict
+                "dispositivo": dispositivo.nome,
+                "id_comando": comando_pendente.id # Adiciona o ID do comando para o ESP poder reportar a execução
+            }
+            # Não marcar como executado aqui, mas esperar a confirmação do ESP via POST
+        else:
+            print(f"Nenhum comando pendente para o dispositivo '{device_name}'.")
+            response_data = {
+                "status": "sucesso",
+                "comando": "NENHUM_COMANDO",
+                "dispositivo": dispositivo.nome
+            }
+        return JsonResponse(response_data)
 
-        # Marca o comando como executado no banco de dados
-        comando_pendente.executado = True
-        comando_pendente.data_execucao = timezone.now()
-        comando_pendente.save()
+    elif request.method == 'POST':
+        # ESP está confirmando a execução de um comando.
+        try:
+            data = json.loads(request.body)
+            comando_id = data.get('comando_id') # Esperamos o ID do comando agora
+            status_execucao = data.get('status', 'sucesso') # Status de execução reportado pelo ESP
 
-        return JsonResponse(comando_para_enviar, status=200)
-    else:
-        # Não há comandos pendentes para este dispositivo
-        print(f"Nenhum comando pendente para o dispositivo '{dispositivo.nome}'.")
-        return JsonResponse({"status": "sucesso", "comando": "NENHUM_COMANDO", "dispositivo": dispositivo.nome}, status=200)
+            if comando_id:
+                comando = get_object_or_404(ComandoPendente, id=comando_id, dispositivo=dispositivo)
+                comando.executado = True
+                comando.data_execucao_real = timezone.now() # Registra a hora real de execução
+                comando.save()
+                print(f"Comando ID {comando_id} '{comando.comando}' marcado como executado para '{device_name}'. Status: {status_execucao}")
+                return JsonResponse({"status": "sucesso", "mensagem": "Comando marcado como executado."})
+            else:
+                return JsonResponse({"status": "erro", "mensagem": "ID do comando não fornecido na confirmação."}, status=400)
+
+        except json.JSONDecodeError:
+            return JsonResponse({"status": "erro", "mensagem": "JSON inválido no corpo da requisição."}, status=400)
+        except Exception as e:
+            print(f"Erro ao processar confirmação de comando do ESP: {e}")
+            return JsonResponse({"status": "erro", "mensagem": f"Erro interno: {e}"}, status=500)
     
 
 def gerenciar_dispositivos(request):
-    # Esta view vai lidar tanto com a exibição quanto com o envio de comandos
     if request.method == 'POST':
         device_id = request.POST.get('device_id')
         comando_texto = request.POST.get('comando')
-        parametros_json = request.POST.get('parametros', '{}') # Pega parâmetros, default para JSON vazio
+        parametros_json = request.POST.get('parametros', '').strip()
 
+        # Novas entradas do formulário: data e hora
+        data_agendamento_str = request.POST.get('data_agendamento')
+        hora_agendamento_str = request.POST.get('hora_agendamento')
+
+        # Se os parâmetros estiverem vazios após remover espaços, trate como JSON vazio
         if not parametros_json:
             parametros_json = '{}'
 
         dispositivo = get_object_or_404(Dispositivo, id=device_id)
 
         try:
-            # Tenta analisar os parâmetros como JSON
             parametros_parsed = json.loads(parametros_json)
-            # Verifica se é um dicionário para garantir que pode ser salvo como JSON
             if not isinstance(parametros_parsed, dict):
-                raise ValueError("Parâmetros devem ser um JSON válido (objeto).")
+                raise ValueError("Parâmetros devem ser um JSON válido (objeto), ex: {'chave': 'valor'}.")
+
+            # **Processamento da data e hora agendada**
+            # Combina a data e a hora do formulário em uma string datetime
+            datetime_str = f"{data_agendamento_str} {hora_agendamento_str}"
+            # Converte a string para um objeto datetime
+            # O formato é 'YYYY-MM-DD HH:MM'
+            agendamento_local_dt = datetime.datetime.strptime(datetime_str, '%Y-%m-%d %H:%M')
+
+            # Obtém o fuso horário configurado no Django settings (ex: 'America/Sao_Paulo')
+            django_timezone = pytz.timezone(settings.TIME_ZONE)
+
+            # Torna o objeto datetime ciente do fuso horário local
+            agendamento_aware_dt = django_timezone.localize(agendamento_local_dt)
+
+            # Converte para UTC antes de salvar no banco de dados (boa prática do Django)
+            data_execucao_agendada_utc = agendamento_aware_dt.astimezone(pytz.utc)
+
 
             ComandoPendente.objects.create(
                 dispositivo=dispositivo,
                 comando=comando_texto,
-                parametros=json.dumps(parametros_parsed) # Salva como string JSON
+                parametros=json.dumps(parametros_parsed),
+                data_execucao_agendada=data_execucao_agendada_utc # Salva a data/hora agendada
             )
-            messages.success(request, f"Comando '{comando_texto}' agendado para '{dispositivo.nome}' com sucesso!")
+            messages.success(request, f"Comando '{comando_texto}' agendado para '{dispositivo.nome}' em {agendamento_aware_dt.strftime('%d/%m/%Y %H:%M')} com sucesso!")
         except json.JSONDecodeError:
-            messages.error(request, "Erro: Parâmetros JSON inválidos.")
-        except ValueError as e:
-            messages.error(request, f"Erro: {e}")
+            messages.error(request, "Erro: Parâmetros JSON inválidos. Certifique-se de que é um JSON válido, ex: {'temperatura': 22}.")
+        except ValueError as e: # Captura erros de formatação de data/hora ou JSON
+            messages.error(request, f"Erro ao processar dados: {e}. Verifique o formato da data/hora e do JSON.")
         except Exception as e:
             messages.error(request, f"Ocorreu um erro ao agendar o comando: {e}")
 
-        return redirect('gerenciar_dispositivos') # Redireciona para evitar reenvio do formulário
+        return redirect('gerenciar_dispositivos')
 
     # Para requisições GET (exibição da página)
+    # ... (seu código existente para GET) ...
     dispositivos = Dispositivo.objects.all().order_by('nome')
     leituras_recentes = {}
     for disp in dispositivos:
-        # Pega a leitura mais recente de cada dispositivo
         leitura = LeituraSensor.objects.filter(dispositivo=disp).order_by('-timestamp').first()
         leituras_recentes[disp.id] = leitura
 
     comandos_pendentes_por_dispositivo = {}
     for disp in dispositivos:
-        # Pega os comandos pendentes de cada dispositivo
-        comandos = ComandoPendente.objects.filter(dispositivo=disp, executado=False).order_by('data_criacao')
+        # AQUI: Ajustar para mostrar comandos que *ainda não foram executados*
+        # e que a data agendada já passou ou é o momento atual
+        comandos = ComandoPendente.objects.filter(dispositivo=disp, executado=False).order_by('data_execucao_agendada')
         comandos_pendentes_por_dispositivo[disp.id] = comandos
-
 
     context = {
         'dispositivos': dispositivos,
@@ -158,4 +205,7 @@ def gerenciar_dispositivos(request):
         'comandos_pendentes': comandos_pendentes_por_dispositivo,
     }
     return render(request, 'iot_core/gerenciar_dispositivos.html', context)
+
+
+
 

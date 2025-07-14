@@ -1,55 +1,57 @@
-{% extends 'base.html' %} {# <--- ESSA LINHA DIZ QUE ESTE TEMPLATE HERDA DE base.html #}
-{% load iot_filters %}   {# Mantenha esta linha para carregar seus filtros customizados #}
+{# iot_core/templates/iot_core/gerenciar_dispositivos.html #}
 
-{% block title %}Gerenciar Dispositivos IoT{% endblock %} {# Define o título para esta página #}
+{% extends 'base.html' %}
+{% load iot_filters %}
 
-{% block content %} {# <--- TUDO AQUI DENTRO SERÁ COLOCADO NO 'main-content' DO base.html #}
+{% block title %}Gerenciar Dispositivos IoT{% endblock %}
 
+{% block extra_head %} {# Adicione um pouco de estilo extra para os inputs de data/hora #}
+<style>
+    .datetime-controls {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end; /* Alinha os inputs e botões na base */
+        margin-bottom: 10px;
+    }
+    .datetime-controls div {
+        flex: 1; /* Faz os campos de data/hora ocuparem o mesmo espaço */
+    }
+    .datetime-controls label {
+        margin-bottom: 5px;
+    }
+    .datetime-controls input[type="date"],
+    .datetime-controls input[type="time"] {
+        width: calc(100% - 22px); /* Ajuste para preencher o espaço */
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+    }
+    .datetime-controls .buttons {
+        display: flex;
+        gap: 5px;
+    }
+    .datetime-controls .buttons button {
+        background-color: #007bff; /* Azul para os botões de data/hora */
+        color: white;
+        padding: 8px 12px;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        font-size: 0.9em;
+    }
+    .datetime-controls .buttons button:hover {
+        background-color: #0056b3;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
     <h1>Gerenciar Dispositivos IoT</h1>
-
-    {# As mensagens já estão no base.html, então REMOVA ESTE BLOCO SE ESTIVER AQUI #}
-    {#
-    <ul class="messages">
-        {% if messages %}
-            {% for message in message %}
-                <li {% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-            {% endfor %}
-        {% endif %}
-    </ul>
-    #}
 
     {% if dispositivos %}
         {% for dispositivo in dispositivos %}
             <div class="device-card">
-                <h3>{{ dispositivo.nome }}</h3>
-                <p><strong>Descrição:</strong> {{ dispositivo.descricao|default:"N/A" }}</p>
-                <p><strong>Endereço IP:</strong> {{ dispositivo.ip_endereco }}:{{ dispositivo.porta }}</p>
-                <p><strong>Ativo:</strong> {{ dispositivo.ativo|yesno:"Sim,Não" }}</p>
-                <p><strong>Última Atualização:</strong> {{ dispositivo.ultima_atualizacao|date:"d/m/Y H:i:s" }}</p>
-
-                <h4>Leitura Mais Recente:</h4>
-                {% with leitura=leituras_recentes|get_item:dispositivo.id %}
-                    {% if leitura %}
-                        <p><strong>Temperatura:</strong> {{ leitura.temperatura }}°C</p>
-                        <p><strong>Umidade:</strong> {{ leitura.umidade }}%</p>
-                        <p><strong>Recebido em:</strong> {{ leitura.timestamp|date:"d/m/Y H:i:s" }}</p>
-                    {% else %}
-                        <p>Nenhuma leitura recente disponível.</p>
-                    {% endif %}
-                {% endwith %}
-
-                <h4>Comandos Pendentes:</h4>
-                {% with comandos=comandos_pendentes|get_item:dispositivo.id %}
-                    {% if comandos %}
-                        <ul class="command-list">
-                            {% for comando in comandos %}
-                                <li>{{ comando.comando }} (Criado em: {{ comando.data_criacao|date:"d/m/Y H:i:s" }})</li>
-                            {% endfor %}
-                        </ul>
-                    {% else %}
-                        <p>Nenhum comando pendente.</p>
-                    {% endif %}
-                {% endwith %}
+                {# ... (restante do conteúdo da card do dispositivo) ... #}
 
                 <div class="form-container">
                     <h4>Agendar Novo Comando para {{ dispositivo.nome }}:</h4>
@@ -63,6 +65,21 @@
                         <label for="parametros-{{ dispositivo.id }}">Parâmetros (JSON opcional, ex: {"temperatura": 22}):</label>
                         <textarea id="parametros-{{ dispositivo.id }}" name="parametros" rows="2" placeholder="{}"></textarea>
 
+                        {# NOVOS CAMPOS DE DATA E HORA AQUI #}
+                        <div class="datetime-controls">
+                            <div>
+                                <label for="data-{{ dispositivo.id }}">Data:</label>
+                                <input type="date" id="data-{{ dispositivo.id }}" name="data_agendamento" required>
+                            </div>
+                            <div>
+                                <label for="hora-{{ dispositivo.id }}">Hora:</label>
+                                <input type="time" id="hora-{{ dispositivo.id }}" name="hora_agendamento" required>
+                            </div>
+                            <div class="buttons">
+                                <button type="button" onclick="setDateTimeNow('{{ dispositivo.id }}')">Hoje | Agora</button>
+                            </div>
+                        </div>
+
                         <button type="submit">Agendar Comando</button>
                     </form>
                 </div>
@@ -71,5 +88,26 @@
     {% else %}
         <p>Nenhum dispositivo cadastrado.</p>
     {% endif %}
+{% endblock content %}
 
-{% endblock content %} {# <--- FIM DO BLOCO DE CONTEÚDO #}
+{% block extra_body %} {# Adicionando JavaScript para os botões "Hoje" e "Agora" #}
+<script>
+    function setDateTimeNow(deviceId) {
+        const now = new Date();
+
+        // Formata a data para YYYY-MM-DD
+        const year = now.getFullYear();
+        const month = (now.getMonth() + 1).toString().padStart(2, '0');
+        const day = now.getDate().toString().padStart(2, '0');
+        const dateString = `${year}-${month}-${day}`;
+
+        // Formata a hora para HH:MM
+        const hours = now.getHours().toString().padStart(2, '0');
+        const minutes = now.getMinutes().toString().padStart(2, '0');
+        const timeString = `${hours}:${minutes}`;
+
+        document.getElementById(`data-${deviceId}`).value = dateString;
+        document.getElementById(`hora-${deviceId}`).value = timeString;
+    }
+</script>
+{% endblock %}

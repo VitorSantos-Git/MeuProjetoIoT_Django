@@ -40,18 +40,17 @@ class LeituraSensor(models.Model):
 
 
 class ComandoPendente(models.Model):
-    dispositivo = models.ForeignKey(Dispositivo, on_delete=models.CASCADE, related_name='comandos_pendentes')
-    comando = models.CharField(max_length=100, help_text="O comando a ser enviado (ex: 'LIGAR_AR', 'BUZZER_ON').")
-    parametros = models.TextField(blank=True, null=True, help_text="Parâmetros adicionais para o comando (JSON opcional).")
-    data_criacao = models.DateTimeField(auto_now_add=True, help_text="Data e hora que o comando foi criado.")
-    executado = models.BooleanField(default=False, help_text="Indica se o comando já foi executado pelo dispositivo.")
-    data_execucao = models.DateTimeField(null=True, blank=True, help_text="Data e hora que o comando foi executado.")
+    dispositivo = models.ForeignKey(Dispositivo, on_delete=models.CASCADE)
+    comando = models.CharField(max_length=100)
+    parametros = models.JSONField(default=dict, blank=True, null=True) # Alterado para default=dict
+    data_criacao = models.DateTimeField(auto_now_add=True)
+    data_execucao_agendada = models.DateTimeField(default=timezone.now) # NOVO CAMPO: Define a data/hora agendada
+    executado = models.BooleanField(default=False)
+    data_execucao_real = models.DateTimeField(null=True, blank=True) # Data/hora real que foi executado
 
     def __str__(self):
-        status = "Executado" if self.executado else "Pendente"
-        return f"Comando '{self.comando}' para {self.dispositivo.nome} - Status: {status}"
+        return f"Comando '{self.comando}' para {self.dispositivo.nome} (Agendado: {self.data_execucao_agendada.strftime('%Y-%m-%d %H:%M:%S')}, Executado: {self.executado})"
 
-    class Meta:
-        verbose_name = "Comando Pendente"
-        verbose_name_plural = "Comandos Pendentes"
-        ordering = ['-data_criacao'] # Comandos mais recentes primeiro
+
+
+
