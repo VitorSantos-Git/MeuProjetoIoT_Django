@@ -42,3 +42,23 @@ local_settings.py
 db.sqlite3 # O seu arquivo de banco de dados SQLite!
 /media # Se você tiver uma pasta de uploads de mídia
 /static # Se você gerar arquivos estáticos aqui
+
+# Arduino / ESP specific
+*.ino.hex
+*.ino.eep
+*.ino.bin
+*.ino.elf
+*.ino.lst
+*.ino.map
+*.ino.obj
+*.ino.s
+*.hex
+*.bin
+*.elf
+*.lst
+*.map
+*.obj
+*.s
+/.pio/
+/build/
+/.vscode/
