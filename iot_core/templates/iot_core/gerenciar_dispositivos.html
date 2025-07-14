@@ -6,108 +6,167 @@
 {% block title %}Gerenciar Dispositivos IoT{% endblock %}
 
 {% block extra_head %} {# Adicione um pouco de estilo extra para os inputs de data/hora #}
-<style>
-    .datetime-controls {
-        display: flex;
-        gap: 10px;
-        align-items: flex-end; /* Alinha os inputs e botões na base */
-        margin-bottom: 10px;
-    }
-    .datetime-controls div {
-        flex: 1; /* Faz os campos de data/hora ocuparem o mesmo espaço */
-    }
-    .datetime-controls label {
-        margin-bottom: 5px;
-    }
-    .datetime-controls input[type="date"],
-    .datetime-controls input[type="time"] {
-        width: calc(100% - 22px); /* Ajuste para preencher o espaço */
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-    }
-    .datetime-controls .buttons {
-        display: flex;
-        gap: 5px;
-    }
-    .datetime-controls .buttons button {
-        background-color: #007bff; /* Azul para os botões de data/hora */
-        color: white;
-        padding: 8px 12px;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-        font-size: 0.9em;
-    }
-    .datetime-controls .buttons button:hover {
-        background-color: #0056b3;
-    }
-</style>
-{% endblock %}
+<h1>Gerenciar Dispositivos IoT</h1>
 
-{% block content %}
-    <h1>Gerenciar Dispositivos IoT</h1>
+{% if dispositivos %}
+    {% for dispositivo in dispositivos %}
+        <div class="dispositivo-card">
+            <h2>{{ dispositivo.nome }}</h2>
+            <p>{{ dispositivo.descricao }}</p>
+            <p>Último online: {{ dispositivo.ultimo_online|date:"d/m/Y H:i:s"|default:"Nunca" }}</p>
 
-    {% if dispositivos %}
-        {% for dispositivo in dispositivos %}
-            <div class="device-card">
-                {# ... (restante do conteúdo da card do dispositivo) ... #}
+            <h3>Agendar Novo Comando para {{ dispositivo.nome }}</h3>
+            <form method="post" action="{% url 'gerenciar_dispositivos' %}" onsubmit="return validateForm()">
+                {% csrf_token %}
+                <input type="hidden" name="device_name_from_template" value="{{ dispositivo.nome }}">
+                
+                <label for="comando_{{ dispositivo.nome }}">Comando:</label>
+                <select id="comando_{{ dispositivo.nome }}" name="comando" required>
+                    <option value="">Selecione um comando</option>
+                    <option value="BUZZER_ON">BUZZER_ON</option>
+                    <option value="BUZZER_OFF">BUZZER_OFF</option>
+                    <option value="LIGAR_AR">LIGAR_AR</option>
+                    <option value="DESLIGAR_AR">DESLIGAR_AR</option>
+                    <option value="VENTILACAO_AR">VENTILACAO_AR</option>
+                    </select><br><br>
 
-                <div class="form-container">
-                    <h4>Agendar Novo Comando para {{ dispositivo.nome }}:</h4>
-                    <form method="post">
-                        {% csrf_token %}
-                        <input type="hidden" name="device_id" value="{{ dispositivo.id }}">
+                <label for="parametros_{{ dispositivo.nome }}">Parâmetros (JSON opcional):</label><br>
+                <textarea id="parametros_{{ dispositivo.nome }}" name="parametros" rows="2" cols="30" placeholder='Ex: {"temperatura": 25}'></textarea><br><br>
 
-                        <label for="comando-{{ dispositivo.id }}">Comando (ex: LIGAR_AR, BUZZER_ON):</label>
-                        <input type="text" id="comando-{{ dispositivo.id }}" name="comando" required>
+                <label for="data_execucao_{{ dispositivo.nome }}">Data e Hora de Execução:</label><br>
+                <input type="datetime-local" id="data_execucao_{{ dispositivo.nome }}" name="data_execucao" required step="1"><br><br>
 
-                        <label for="parametros-{{ dispositivo.id }}">Parâmetros (JSON opcional, ex: {"temperatura": 22}):</label>
-                        <textarea id="parametros-{{ dispositivo.id }}" name="parametros" rows="2" placeholder="{}"></textarea>
+                <label for="tipo_repeticao_{{ dispositivo.nome }}">Tipo de Repetição:</label>
+                <select id="tipo_repeticao_{{ dispositivo.nome }}" name="tipo_repeticao" onchange="toggleRepetitionFields(this)">
+                    <option value="nenhum">Nenhum</option>
+                    <option value="diario">Diário</option>
+                    <option value="semanal">Semanal</option>
+                </select><br><br>
 
-                        {# NOVOS CAMPOS DE DATA E HORA AQUI #}
-                        <div class="datetime-controls">
-                            <div>
-                                <label for="data-{{ dispositivo.id }}">Data:</label>
-                                <input type="date" id="data-{{ dispositivo.id }}" name="data_agendamento" required>
-                            </div>
-                            <div>
-                                <label for="hora-{{ dispositivo.id }}">Hora:</label>
-                                <input type="time" id="hora-{{ dispositivo.id }}" name="hora_agendamento" required>
-                            </div>
-                            <div class="buttons">
-                                <button type="button" onclick="setDateTimeNow('{{ dispositivo.id }}')">Hoje | Agora</button>
-                            </div>
-                        </div>
-
-                        <button type="submit">Agendar Comando</button>
-                    </form>
+                <div id="dias_semana_fields_{{ dispositivo.nome }}" style="display: none;">
+                    <label>Dias da Semana (para repetição semanal):</label><br>
+                    <input type="checkbox" name="dias_da_semana" value="0"> Segunda
+                    <input type="checkbox" name="dias_da_semana" value="1"> Terça
+                    <input type="checkbox" name="dias_da_semana" value="2"> Quarta
+                    <input type="checkbox" name="dias_da_semana" value="3"> Quinta
+                    <input type="checkbox" name="dias_da_semana" value="4"> Sexta
+                    <input type="checkbox" name="dias_da_semana" value="5"> Sábado
+                    <input type="checkbox" name="dias_da_semana" value="6"> Domingo
+                    <br><br>
                 </div>
+
+                <div id="data_fim_repeticao_field_{{ dispositivo.nome }}" style="display: none;">
+                    <label for="data_fim_repeticao_{{ dispositivo.nome }}">Data Fim da Repetição (opcional):</label><br>
+                    <input type="date" id="data_fim_repeticao_{{ dispositivo.nome }}" name="data_fim_repeticao"><br><br>
+                </div>
+                <button type="submit">Agendar Comando</button>
+            </form>
+            <script>
+                function toggleRepetitionFields(selectElement) {
+                    var deviceName = selectElement.id.replace('tipo_repeticao_', '');
+                    var diasSemanaDiv = document.getElementById('dias_semana_fields_' + deviceName);
+                    var dataFimDiv = document.getElementById('data_fim_repeticao_field_' + deviceName);
+
+                    if (selectElement.value === 'semanal') {
+                        diasSemanaDiv.style.display = 'block';
+                        dataFimDiv.style.display = 'block';
+                    } else if (selectElement.value === 'diario') {
+                        diasSemanaDiv.style.display = 'none';
+                        dataFimDiv.style.display = 'block';
+                    } else {
+                        diasSemanaDiv.style.display = 'none';
+                        dataFimDiv.style.display = 'none';
+                    }
+                }
+
+                // Esta parte do script garante que os campos de repetição sejam ocultados/exibidos corretamente
+                // quando a página carrega, para cada formulário de dispositivo.
+                document.addEventListener('DOMContentLoaded', function() {
+                    var selectElement = document.getElementById('tipo_repeticao_' + '{{ dispositivo.nome }}');
+                    if (selectElement) { // Verifica se o elemento existe antes de tentar manipulá-lo
+                        toggleRepetitionFields(selectElement);
+                    }
+                });
+                
+                // Função para validar o formulário antes do envio (já existente)
+                function validateForm() {
+                    // Esta função agora precisa ser mais genérica ou ser passada para um contexto específico.
+                    // Se você tem vários formulários, o `document.activeElement.closest('form')` pode não ser confiável.
+                    // Uma forma mais robusta é passar o próprio formulário como argumento no `onsubmit`.
+                    // Por exemplo: `<form ... onsubmit="return validateForm(this)">`
+                    // E na função: `function validateForm(formElement) { ... var dataExecucaoInput = formElement.querySelector('input[name="data_execucao"]'); ... }`
+                    
+                    var dataExecucaoInput = document.activeElement.closest('form').querySelector('input[name="data_execucao"]');
+                    if (dataExecucaoInput) {
+                        var selectedDateTime = new Date(dataExecucaoInput.value);
+                        var now = new Date();
+                        if (selectedDateTime < now) {
+                            alert("A data e hora de execução não pode ser no passado. Por favor, selecione uma data e hora futura.");
+                            return false;
+                        }
+                    }
+                    return true;
+                }
+            </script>
+            <div class="comandos-pendentes">
+                <h4>Comandos Pendentes para {{ dispositivo.nome }}</h4>
+                {% if comandos_pendentes_por_dispositivo|get_item:dispositivo.id %}
+                    <ul>
+                    {% for comando in comandos_pendentes_por_dispositivo|get_item:dispositivo.id %}
+                        {% if not comando.is_master_repetitive %} {# Não exibe os comandos mestres aqui #}
+                            <li>
+                                Comando: <strong>{{ comando.comando }}</strong> 
+                                {% if comando.parametros %}(Parâmetros: {{ comando.parametros }}){% endif %}
+                                - Agendado para: <strong>{{ comando.data_execucao_agendada|date:"d/m/Y H:i:s" }}</strong>
+                                {% if comando.executado %}
+                                    - Executado em: {{ comando.data_execucao_real|date:"d/m/Y H:i:s" }}
+                                {% else %}
+                                    - Aguardando execução...
+                                {% endif %}
+                                {# Adicione um botão de cancelar aqui se quiser #}
+                            </li>
+                        {% endif %}
+                    {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Nenhum comando pendente para este dispositivo.</p>
+                {% endif %}
             </div>
-        {% endfor %}
-    {% else %}
-        <p>Nenhum dispositivo cadastrado.</p>
-    {% endif %}
-{% endblock content %}
 
-{% block extra_body %} {# Adicionando JavaScript para os botões "Hoje" e "Agora" #}
-<script>
-    function setDateTimeNow(deviceId) {
-        const now = new Date();
+            <div class="comandos-mestres-repetitivos">
+                <h4>Comandos Repetitivos Agendados para {{ dispositivo.nome }} (Mestres)</h4>
+                {% if comandos_mestres_por_dispositivo|get_item:dispositivo.id %}
+                    <ul>
+                    {% for comando_mestre in comandos_mestres_por_dispositivo|get_item:dispositivo.id %}
+                        <li>
+                            Comando: <strong>{{ comando_mestre.comando }}</strong> 
+                            {% if comando_mestre.parametros %}(Parâmetros: {{ comando_mestre.parametros }}){% endif %}
+                            - Inicia em: <strong>{{ comando_mestre.data_execucao_agendada|date:"d/m/Y H:i:s" }}</strong>
+                            (Repetição: {{ comando_mestre.get_tipo_repeticao_display }})
+                            {% if comando_mestre.tipo_repeticao == 'semanal' and comando_mestre.dias_da_semana %}
+                                (Dias: 
+                                    {% for dia_num in comando_mestre.dias_da_semana|split_and_map_weekday_names %}
+                                        {{ dia_num }}{% if not forloop.last %}, {% endif %}
+                                    {% endfor %}
+                                )
+                            {% endif %}
+                            {% if comando_mestre.data_fim_repeticao %}
+                                - Fim: {{ comando_mestre.data_fim_repeticao|date:"d/m/Y" }}
+                            {% else %}
+                                - Sem data de fim.
+                            {% endif %}
+                            {# Botão para editar ou cancelar o comando mestre #}
+                        </li>
+                    {% endfor %}
+                    </ul>
+                {% else %}
+                    <p>Nenhum comando repetitivo mestre agendado para este dispositivo.</p>
+                {% endif %}
+            </div>
 
-        // Formata a data para YYYY-MM-DD
-        const year = now.getFullYear();
-        const month = (now.getMonth() + 1).toString().padStart(2, '0');
-        const day = now.getDate().toString().padStart(2, '0');
-        const dateString = `${year}-${month}-${day}`;
+        </div> {% endfor %}
+{% else %}
+    <p>Nenhum dispositivo IoT cadastrado.</p>
+{% endif %}
 
-        // Formata a hora para HH:MM
-        const hours = now.getHours().toString().padStart(2, '0');
-        const minutes = now.getMinutes().toString().padStart(2, '0');
-        const timeString = `${hours}:${minutes}`;
-
-        document.getElementById(`data-${deviceId}`).value = dateString;
-        document.getElementById(`hora-${deviceId}`).value = timeString;
-    }
-</script>
 {% endblock %}

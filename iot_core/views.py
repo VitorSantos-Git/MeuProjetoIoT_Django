@@ -7,7 +7,7 @@ import json # Para lidar com JSON
 from .models import Dispositivo, LeituraSensor, ComandoPendente # Importe o novo modelo LeituraSensor
 from django.utils import timezone # Importe timezone para timestamps
 from django.contrib import messages # Importe messages para feedback ao usuário
-import datetime #
+from datetime import datetime, timedelta, date
 import pytz     
 from django.conf import settings 
 
@@ -130,81 +130,264 @@ def enviar_comando_dispositivo(request, device_name):
             return JsonResponse({"status": "erro", "mensagem": f"Erro interno: {e}"}, status=500)
     
 
-def gerenciar_dispositivos(request):
-    if request.method == 'POST':
-        device_id = request.POST.get('device_id')
-        comando_texto = request.POST.get('comando')
-        parametros_json = request.POST.get('parametros', '').strip()
-
-        # Novas entradas do formulário: data e hora
-        data_agendamento_str = request.POST.get('data_agendamento')
-        hora_agendamento_str = request.POST.get('hora_agendamento')
-
-        # Se os parâmetros estiverem vazios após remover espaços, trate como JSON vazio
-        if not parametros_json:
-            parametros_json = '{}'
-
-        dispositivo = get_object_or_404(Dispositivo, id=device_id)
-
-        try:
-            parametros_parsed = json.loads(parametros_json)
-            if not isinstance(parametros_parsed, dict):
-                raise ValueError("Parâmetros devem ser um JSON válido (objeto), ex: {'chave': 'valor'}.")
-
-            # **Processamento da data e hora agendada**
-            # Combina a data e a hora do formulário em uma string datetime
-            datetime_str = f"{data_agendamento_str} {hora_agendamento_str}"
-            # Converte a string para um objeto datetime
-            # O formato é 'YYYY-MM-DD HH:MM'
-            agendamento_local_dt = datetime.datetime.strptime(datetime_str, '%Y-%m-%d %H:%M')
-
-            # Obtém o fuso horário configurado no Django settings (ex: 'America/Sao_Paulo')
-            django_timezone = pytz.timezone(settings.TIME_ZONE)
-
-            # Torna o objeto datetime ciente do fuso horário local
-            agendamento_aware_dt = django_timezone.localize(agendamento_local_dt)
-
-            # Converte para UTC antes de salvar no banco de dados (boa prática do Django)
-            data_execucao_agendada_utc = agendamento_aware_dt.astimezone(pytz.utc)
-
-
-            ComandoPendente.objects.create(
-                dispositivo=dispositivo,
-                comando=comando_texto,
-                parametros=json.dumps(parametros_parsed),
-                data_execucao_agendada=data_execucao_agendada_utc # Salva a data/hora agendada
-            )
-            messages.success(request, f"Comando '{comando_texto}' agendado para '{dispositivo.nome}' em {agendamento_aware_dt.strftime('%d/%m/%Y %H:%M')} com sucesso!")
-        except json.JSONDecodeError:
-            messages.error(request, "Erro: Parâmetros JSON inválidos. Certifique-se de que é um JSON válido, ex: {'temperatura': 22}.")
-        except ValueError as e: # Captura erros de formatação de data/hora ou JSON
-            messages.error(request, f"Erro ao processar dados: {e}. Verifique o formato da data/hora e do JSON.")
-        except Exception as e:
-            messages.error(request, f"Ocorreu um erro ao agendar o comando: {e}")
-
-        return redirect('gerenciar_dispositivos')
-
-    # Para requisições GET (exibição da página)
-    # ... (seu código existente para GET) ...
+def gerenciar_dispositivos(request, device_name=None): # device_name agora pode ser None para a URL base
     dispositivos = Dispositivo.objects.all().order_by('nome')
-    leituras_recentes = {}
-    for disp in dispositivos:
-        leitura = LeituraSensor.objects.filter(dispositivo=disp).order_by('-timestamp').first()
-        leituras_recentes[disp.id] = leitura
+    feedback_message = None
+    feedback_type = None 
 
-    comandos_pendentes_por_dispositivo = {}
-    for disp in dispositivos:
-        # AQUI: Ajustar para mostrar comandos que *ainda não foram executados*
-        # e que a data agendada já passou ou é o momento atual
-        comandos = ComandoPendente.objects.filter(dispositivo=disp, executado=False).order_by('data_execucao_agendada')
-        comandos_pendentes_por_dispositivo[disp.id] = comandos
+    if request.method == 'POST':
+        # RECUPERA O NOME DO DISPOSITIVO DO CAMPO ESCONDIDO DO FORMULÁRIO
+        device_name_from_post = request.POST.get('device_name_from_template')
+        if not device_name_from_post:
+            # Isso não deve acontecer se o campo hidden estiver sempre lá, mas é uma proteção
+            feedback_message = "Erro: Nome do dispositivo não fornecido no formulário."
+            feedback_type = "error"
+            # Renderiza a página novamente com a mensagem de erro
+            # ... (código de retorno de erro, similar ao que já temos) ...
+            return # Ou renderiza o template de erro
+        try:
+            dispositivo = get_object_or_404(Dispositivo, nome=device_name)
+            comando_str = request.POST.get('comando')
+            parametros_str = request.POST.get('parametros')
+            data_execucao_str = request.POST.get('data_execucao')
+            
+            # Novos campos de repetição
+            tipo_repeticao = request.POST.get('tipo_repeticao', 'nenhum')
+            dias_da_semana = request.POST.getlist('dias_da_semana') # getlist para checkboxes
+            data_fim_repeticao_str = request.POST.get('data_fim_repeticao')
 
-    context = {
-        'dispositivos': dispositivos,
-        'leituras_recentes': leituras_recentes,
-        'comandos_pendentes': comandos_pendentes_por_dispositivo,
-    }
-    return render(request, 'iot_core/gerenciar_dispositivos.html', context)
+            # Conversão de parâmetros para JSON (se fornecido)
+            parametros = {}
+            if parametros_str:
+                try:
+                    parametros = json.loads(parametros_str)
+                except json.JSONDecodeError:
+                    feedback_message = "Erro: Parâmetros JSON inválidos."
+                    feedback_type = "error"
+                    # Renderiza a página novamente com a mensagem de erro
+                    comandos_pendentes_por_dispositivo = {
+                        d.id: ComandoPendente.objects.filter(dispositivo=d, executado=False).exclude(is_master_repetitive=True) 
+                        for d in dispositivos
+                    }
+                    todos_comandos_pendentes = ComandoPendente.objects.filter(dispositivo__in=dispositivos, executado=False)
+                    return render(request, 'iot_core/gerenciar_dispositivos.html', {
+                        'dispositivos': dispositivos,
+                        'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+                        'todos_comandos_pendentes': todos_comandos_pendentes,
+                        'feedback_message': feedback_message,
+                        'feedback_type': feedback_type
+                    })
+
+            # Conversão da data de execução
+            # Certifique-se de que o fuso horário está configurado em settings.py (TIME_ZONE, USE_TZ=True)
+            try:
+                # O input datetime-local no HTML já fornece no formato ISO 8601 (YYYY-MM-DDTHH:MM), 
+                # que pode ser lido diretamente pelo datetime.fromisoformat
+                data_execucao_naive = datetime.fromisoformat(data_execucao_str)
+                
+                # Obtém o fuso horário atual do Django (configurado em settings.py)
+                current_tz = pytz.timezone(settings.TIME_ZONE) 
+                
+                # Torna a data/hora ciente do fuso horário
+                data_execucao_aware = current_tz.localize(data_execucao_naive)
+
+                # Validar se a data agendada não é no passado
+                if data_execucao_aware < timezone.now():
+                    feedback_message = "Erro: A data e hora de execução não podem ser no passado."
+                    feedback_type = "error"
+                     # Renderiza a página novamente com a mensagem de erro
+                    comandos_pendentes_por_dispositivo = {
+                        d.id: ComandoPendente.objects.filter(dispositivo=d, executado=False).exclude(is_master_repetitive=True) 
+                        for d in dispositivos
+                    }
+                    todos_comandos_pendentes = ComandoPendente.objects.filter(dispositivo__in=dispositivos, executado=False)
+                    return render(request, 'iot_core/gerenciar_dispositivos.html', {
+                        'dispositivos': dispositivos,
+                        'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+                        'todos_comandos_pendentes': todos_comandos_pendentes,
+                        'feedback_message': feedback_message,
+                        'feedback_type': feedback_type
+                    })
+
+            except ValueError:
+                feedback_message = "Erro: Formato de data e hora inválido."
+                feedback_type = "error"
+                 # Renderiza a página novamente com a mensagem de erro
+                comandos_pendentes_por_dispositivo = {
+                    d.id: ComandoPendente.objects.filter(dispositivo=d, executado=False).exclude(is_master_repetitive=True) 
+                    for d in dispositivos
+                }
+                todos_comandos_pendentes = ComandoPendente.objects.filter(dispositivo__in=dispositivos, executado=False)
+                return render(request, 'iot_core/gerenciar_dispositivos.html', {
+                    'dispositivos': dispositivos,
+                    'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+                    'todos_comandos_pendentes': todos_comandos_pendentes,
+                    'feedback_message': feedback_message,
+                    'feedback_type': feedback_type
+                })
+
+            # Processamento da data de fim de repetição
+            data_fim_repeticao_obj = None
+            if data_fim_repeticao_str:
+                try:
+                    data_fim_repeticao_obj = datetime.strptime(data_fim_repeticao_str, '%Y-%m-%d').date()
+                except ValueError:
+                    feedback_message = "Erro: Formato de data de fim de repetição inválido."
+                    feedback_type = "error"
+                    # ... (código para renderizar com erro) ...
+                    comandos_pendentes_por_dispositivo = {
+                        d.id: ComandoPendente.objects.filter(dispositivo=d, executado=False).exclude(is_master_repetitive=True) 
+                        for d in dispositivos
+                    }
+                    todos_comandos_pendentes = ComandoPendente.objects.filter(dispositivo__in=dispositivos, executado=False)
+                    return render(request, 'iot_core/gerenciar_dispositivos.html', {
+                        'dispositivos': dispositivos,
+                        'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+                        'todos_comandos_pendentes': todos_comandos_pendentes,
+                        'feedback_message': feedback_message,
+                        'feedback_type': feedback_type
+                    })
+
+            # Lógica para criar comando único ou mestre repetitivo
+            if tipo_repeticao != 'nenhum':
+                # É um comando repetitivo mestre
+                if tipo_repeticao == 'semanal' and not dias_da_semana:
+                    feedback_message = "Erro: Para repetição semanal, selecione pelo menos um dia da semana."
+                    feedback_type = "error"
+                     # Renderiza a página novamente com a mensagem de erro
+                    comandos_pendentes_por_dispositivo = {
+                        d.id: ComandoPendente.objects.filter(dispositivo=d, executado=False).exclude(is_master_repetitive=True) 
+                        for d in dispositivos
+                    }
+                    todos_comandos_pendentes = ComandoPendente.objects.filter(dispositivo__in=dispositivos, executado=False)
+                    return render(request, 'iot_core/gerenciar_dispositivos.html', {
+                        'dispositivos': dispositivos,
+                        'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+                        'todos_comandos_pendentes': todos_comandos_pendentes,
+                        'feedback_message': feedback_message,
+                        'feedback_type': feedback_type
+                    })
+                
+                # Cria o comando mestre (que não será executado diretamente pelo ESP)
+                master_command = ComandoPendente.objects.create(
+                    dispositivo=dispositivo,
+                    comando=comando_str,
+                    parametros=parametros,
+                    data_execucao_agendada=data_execucao_aware,
+                    is_master_repetitive=True, # MARCA COMO MESTRE
+                    tipo_repeticao=tipo_repeticao,
+                    dias_da_semana=','.join(dias_da_semana) if dias_da_semana else None,
+                    data_fim_repeticao=data_fim_repeticao_obj
+                )
+                
+                feedback_message = f"Comando '{comando_str}' agendado como REPETITIVO para '{dispositivo.nome}' com sucesso!"
+                feedback_type = "success"
+
+                # Chamar a função para gerar as primeiras instâncias (ex: para hoje e alguns dias/semanas)
+                # Começa a gerar a partir da data de agendamento do mestre, mas apenas para o dia *futuro* se a hora já passou.
+                # A tarefa agendada vai cuidar da geração contínua.
+                
+                # Se a data_execucao_aware for no futuro, a primeira instância será gerada por ela mesma.
+                # Se for no passado (e.g. "todo dia as 23h00"), então a primeira geração deve ser para HOJE se a hora não passou,
+                # ou para AMANHÃ se a hora já passou.
+                
+                # Para simplificar, vamos deixar que o comando `generate_repetitive_commands` cuide da geração futura
+                # Este agendamento mestre apenas cria o "template".
+                # Para garantir que o comando de hoje (se aplicável) seja gerado:
+                # Verifique se a data de execução agendada está no futuro (hora do dia de hoje).
+                # Se a data agendada for para um dia no futuro (ex: agendou para semana que vem),
+                # o comando mestre já vai indicar isso.
+                # A geração principal deve ser feita pelo comando de gerenciamento.
+                
+                # Podemos chamar a geração para o dia de hoje APENAS se a hora ainda não passou:
+                # E se a data agendada é hoje
+                if data_execucao_aware.date() == timezone.localdate() and data_execucao_aware > timezone.now():
+                    # Gerar apenas a instância para hoje, se ela ainda não passou
+                    ComandoPendente.generate_repetitive_commands(master_command, start_date=timezone.localdate(), end_date=timezone.localdate())
+                elif data_execucao_aware.date() < timezone.localdate():
+                     # Se agendou um comando repetitivo mestre com data/hora no passado,
+                     # não gerar para hoje, deixe o agendador gerar para o futuro.
+                     pass 
+                # Se data_execucao_aware.date() for amanhã ou depois, o agendador cuidará.
+
+            else:
+                # É um comando único (comportamento atual)
+                ComandoPendente.objects.create(
+                    dispositivo=dispositivo,
+                    comando=comando_str,
+                    parametros=parametros,
+                    data_execucao_agendada=data_execucao_aware,
+                    is_master_repetitive=False # Comando único
+                )
+                feedback_message = f"Comando '{comando_str}' agendado para '{dispositivo.nome}' em {data_execucao_aware.strftime('%d/%m/%Y %H:%M')} com sucesso!"
+                feedback_type = "success"
+
+        except Exception as e:
+            feedback_message = f"Ocorreu um erro ao agendar o comando: {e}"
+            feedback_type = "error"
+            print(f"Erro ao agendar comando: {e}") # Para depuração no console
+        """ 
+        # Re-renderiza a página com os dados atualizados e feedback
+        comandos_pendentes_por_dispositivo = {
+            d.id: ComandoPendente.objects.filter(dispositivo=d, executado=False).exclude(is_master_repetitive=True) 
+            for d in dispositivos
+        }"""
+
+       # Re-renderiza a página com os dados atualizados e feedback
+        comandos_pendentes_por_dispositivo = {}
+        comandos_mestres_por_dispositivo = {}
+
+        for d in dispositivos:
+            # Comandos únicos executáveis
+            comandos_pendentes_por_dispositivo[d.id] = ComandoPendente.objects.filter(
+                dispositivo=d, 
+                executado=False, 
+                is_master_repetitive=False
+            ).order_by('data_execucao_agendada') # Adiciona ordenação
+
+            # Comandos mestres repetitivos
+            comandos_mestres_por_dispositivo[d.id] = ComandoPendente.objects.filter(
+                dispositivo=d, 
+                is_master_repetitive=True, 
+                executado=False # Um comando mestre nunca é "executado" no ESP, mas podemos marcar se ele foi "desativado"
+            ).order_by('data_execucao_agendada') # Adiciona ordenação
+            
+        return render(request, 'iot_core/gerenciar_dispositivos.html', {
+            'dispositivos': dispositivos,
+            'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+            'comandos_mestres_por_dispositivo': comandos_mestres_por_dispositivo, # NOVO CONTEXTO
+            'feedback_message': feedback_message,
+            'feedback_type': feedback_type
+        })
+    else:
+        # GET request: apenas exibe os dispositivos e comandos
+        comandos_pendentes_por_dispositivo = {}
+        comandos_mestres_por_dispositivo = {} # NOVO DICIONÁRIO
+
+        for d in dispositivos:
+            # Comandos únicos executáveis
+            comandos_pendentes_por_dispositivo[d.id] = ComandoPendente.objects.filter(
+                dispositivo=d, 
+                executado=False, 
+                is_master_repetitive=False
+            ).order_by('data_execucao_agendada')
+
+            # Comandos mestres repetitivos
+            comandos_mestres_por_dispositivo[d.id] = ComandoPendente.objects.filter(
+                dispositivo=d, 
+                is_master_repetitive=True, 
+                executado=False # Um comando mestre nunca é "executado" no ESP
+            ).order_by('data_execucao_agendada')
+        
+        return render(request, 'iot_core/gerenciar_dispositivos.html', {
+            'dispositivos': dispositivos,
+            'comandos_pendentes_por_dispositivo': comandos_pendentes_por_dispositivo,
+            'comandos_mestres_por_dispositivo': comandos_mestres_por_dispositivo, # NOVO CONTEXTO
+            'feedback_message': feedback_message,
+            'feedback_type': feedback_type
+        })
+
+
 
 
 
