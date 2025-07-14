@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.mq
+*.zip
+*.tar.gz
+.tox/
+.coverage
+.cache
+.pytest_cache/
+htmlcov/
+.mypy_cache/
+.dmypy.json
+.idea/ # Para usuários de PyCharm/IntelliJ
+
+# Django specific
+*.log
+*.pot
+*.mo
+*.po
+local_settings.py
+db.sqlite3 # O seu arquivo de banco de dados SQLite!
+/media # Se você tiver uma pasta de uploads de mídia
+/static # Se você gerar arquivos estáticos aqui
