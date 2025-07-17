@@ -28,11 +28,11 @@
 // //EN (ou CH_PD) - Habilitação do chip (ativo em nível alto) 
 
 // --- Configurações de Rede ---
-const char* ssid = "casa";       // Seu nome de rede Wi-Fi
-const char* password = "pudim638";  // Sua senha do Wi-Fi
+const char* ssid = "IFSP-LAB";       // Seu nome de rede Wi-Fi
+const char* password = "%mf*GP-10RpGm";  // Sua senha do Wi-Fi
 
 // --- Configurações do Servidor Django ---
-const char* djangoHost = "192.168.31.185"; // O IP do seu computador onde o Django está rodando (ex: 192.168.1.100)
+const char* djangoHost = "10.123.71.216"; // O IP do seu computador onde o Django está rodando (ex: 192.168.1.100)
 const int djangoPort = 8000;              // A porta do Django (padrão 8000)
 const char* deviceName = "Meu_ESP_Teste"; // O nome do dispositivo cadastrado no Django Admin
 
@@ -94,7 +94,8 @@ void setup() {
   Serial.print("Conectando-se a ");
   Serial.println(ssid);
 
-  WiFi.begin(ssid, password);
+  //WiFi.begin(ssid, password); // rede normal
+  WiFi.begin(ssid, password, 0, NULL, true); //Rede da escola oculta
 
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);

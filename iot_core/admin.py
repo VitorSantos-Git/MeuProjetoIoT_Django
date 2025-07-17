@@ -7,7 +7,7 @@ from datetime import datetime
 
 
 @admin.register(LeituraSensor)
-class LeituraSensor(admin.ModelAdmin):
+class LeituraSensorAdmin(admin.ModelAdmin):
     list_display = ('dispositivo', 'temperatura', 'umidade', 'timestamp')
     search_fields = ('nome',)
 
