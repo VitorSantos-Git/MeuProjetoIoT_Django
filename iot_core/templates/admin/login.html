@@ -1,0 +1,90 @@
+{% extends "admin/login.html" %}
+
+{% load static %} {# Mantém o load static para caso você queira usar imagens ou outros assets no futuro #}
+
+{% block title %}Acesso | Login{% endblock %} {# Define o título da aba do navegador para "Login" #}
+
+{% block branding %}
+  
+ <h1 id="site-name"><a href="{% url 'admin:index' %}"></Login><img src="{% static 'img/LogoIFSPCMP.png' %}" width="150px"></a></h1>
+
+{% endblock %}
+
+{% block extrastyle %}
+{{ block.super }}
+
+ <style>      
+
+        #container {
+            /* Restaura a caixa branca do formulário, com bordas e sombra */
+            background-color: #fff;
+            border: 1px solid #ddd;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            
+            /* Remove as margens e larguras fixas daqui para deixar o flexbox do body controlar */
+            margin: 0; 
+            width: auto; /* Deixa a largura ser definida pelo conteúdo ou pelo Django Admin */
+            max-width: 400px; /* Define uma largura máxima razoável para o formulário */
+            min-width: 300px; /* Garante uma largura mínima */
+        }
+
+        .login #header {
+            /* Cabeçalho do formulário: verde claro */
+            background: #12b177; /* Verde claro */
+            color: #861010; /* Cor do texto */
+            border-bottom: 1px solid #95d4bc;
+            border-radius: 3px 3px 0 0;
+            padding: 10px; /* Padding interno do cabeçalho */
+            text-align: center; /* Centraliza o conteúdo (logo e texto) dentro do cabeçalho */
+        }
+
+        .login #header h1 {
+            color: #000000; /* Cor do texto "Login" */
+            margin: 0; /* Remove margens padrão */
+            padding: 0; /* Remove padding padrão */
+            display: inline-block; /* Faz o H1 se ajustar ao conteúdo e não quebrar linha */
+            /* text-align: center está no elemento pai .login #header ou no inline style do h1 */
+        }
+
+        .login #header h1 img {
+            margin-right: 10px; /* Espaço entre a imagem e o texto */
+            vertical-align: middle; /* Alinha a imagem e o texto verticalmente */
+        }
+        
+        .login #content {
+            /* Conteúdo do formulário (campos e botão) */
+            background: #fff;
+            padding: 20px; /* Padding interno para os campos */
+            box-sizing: border-box; /* Garante que padding não adicione à largura total */
+        }
+        
+        /* Estilos para o botão "Acessar" */
+        .submit-row {
+            /* Alinha o botão à direita dentro do formulário */
+            background: none;
+            padding: 0;
+            border-top: none;
+            text-align: right; /* Essencial para alinhar o botão */
+            margin-top: 20px;
+        }
+
+        .submit-row input[type=submit] {
+            background: #12b177; /* Verde claro para o botão */
+            color: #0f0e0e;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+    </style>
+
+{% endblock %}
+
+
+
+{% block nav-global %}{% endblock %}

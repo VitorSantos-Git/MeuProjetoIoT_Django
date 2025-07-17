@@ -32,13 +32,13 @@ ALLOWED_HOSTS = ['192.168.31.185','10.123.71.216',  'localhost', '127.0.0.1'] #A
 # Application definition
 
 INSTALLED_APPS = [
+    'iot_core',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'iot_core',
 ]
 
 MIDDLEWARE = [
@@ -57,7 +57,7 @@ TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
         'DIRS': [os.path.join(BASE_DIR, 'iot_core', 'templates')],
-        'APP_DIRS': True,
+        #'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
                 'django.template.context_processors.debug',
@@ -65,6 +65,10 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
             ],
+            'loaders': [ #
+                'django.template.loaders.filesystem.Loader', #
+                'django.template.loaders.app_directories.Loader' #
+            ]
         },
     },
 ]

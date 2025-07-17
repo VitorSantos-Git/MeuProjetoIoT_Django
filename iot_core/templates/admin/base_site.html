@@ -1,0 +1,75 @@
+{% extends "admin/base.html" %}
+{% load static %} {# Necessário para carregar arquivos estáticos como imagens ou CSS #}
+
+{% block title %}IoT | Geral{% endblock %} {# Define o título da aba do navegador #}
+
+{% block branding %}
+    <h1 id="site-name"><a href="{% url 'admin:index' %}"><img src="{% static 'img/LogoIFSPCMP.png' %}" alt="LogoIFSPCMP.png" width="150px"></a></h1>
+{% endblock %}
+
+
+
+{% block extrastyle %}
+
+    {{ block.super }} {# ESSENCIAL! Inclui o CSS padrão do Admin para este bloco #}
+    <style>
+        /* Cor de fundo do cabeçalho principal e títulos da barra lateral */
+        #header, .module h2, .selector-chosen {
+            background: #12b177; /* Sua cor verde claro */
+            color: #333; /* Cor do texto para contraste */
+        }
+
+        /* Cor do cabeçalho principal (topo da página) */
+        #header {
+            border-bottom: 1px solid #012316; /* Borda sutil */
+        }
+
+        /* Cor dos links no cabeçalho superior (BEM-VINDO(A), ADMIN) */
+        #user-tools a {
+            color: #000; /* Cor do texto dos links, para melhor visibilidade no fundo verde */
+        }
+        
+
+        /* Oculta o botão de alternar modo claro/escuro (o "sol") */
+        #user-tools .theme-toggle {
+            display: none; /* Isso esconde o botão completamente */
+        }
+
+        /* Cor de fundo para botões primários (como "Adicionar Comando Pendente") */
+        .button.default, input[type=submit].default, .submit-row input[type=submit] {
+            background: #a8e6cf; /* Sua cor verde claro */
+            color: #333; /* Cor do texto do botão */
+            border-color: #95d4bc; /* Borda sutil para o botão */
+        }
+
+
+        .module a.addlink:hover, .module a.changelink:hover {
+            background: #95d4bc; /* Um tom um pouco mais escuro ao passar o mouse */
+            color: #333;
+        }
+
+        /* Estilo para links ao passar o mouse, para manter a consistência */
+        a:hover, #user-tools a:hover {
+            color: #000; /* Preto ou um cinza bem escuro para o hover */
+        }
+
+        /* Ajustes de cor de texto para elementos específicos, se necessário */
+        #site-name a {
+            color: #333; /* Garante que o texto "Administração" no cabeçalho seja visível */
+        }
+
+        /* Seções de filtro e ações recentes também podem ter um cabeçalho azul */
+        .grp-module h2, .grp-module h3, .dashboard .module h2 {
+            background: #a8e6cf; /* Cor verde para esses cabeçalhos também */
+            color: #333;
+        }
+
+        /* Para a barra de navegação global, se ela fosse visível (no seu caso está oculta) */
+        #nav-sidebar .current-app .section ul {
+            background: #e0ffe0; /* Um verde muito claro para o fundo da lista da app atual */
+        }
+
+    </style>
+{% endblock %}
+
+{% block nav-global %}{% endblock %} {# Mantém este bloco vazio para remover a navegação global #}
