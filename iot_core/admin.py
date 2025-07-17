@@ -1,7 +1,7 @@
 # iot_core/admin.py
 
 from django.contrib import admin
-from .models import Dispositivo, LeituraSensor, ComandoPendente  # Importe o seu modelo Dispositivo
+from .models import Dispositivo, LeituraSensor, ComandoPendente, AirConditionerLog  # Importe o seu modelo Dispositivo
 from django.utils import timezone
 from datetime import datetime 
 
@@ -60,3 +60,12 @@ class ComandoPendenteAdmin(admin.ModelAdmin):
     # Se você tiver um filtro 'split_and_map_weekday_names', ele precisaria ser importado
     # ou a lógica para 'dias_da_semana' no Admin talvez precise de um custom widget/field.
     # Por enquanto, focamos na data/hora.
+
+# Crie uma classe Admin customizada para EstadoDoAr
+@admin.register(AirConditionerLog)
+class AirConditionerLogAdmin(admin.ModelAdmin):
+    list_display = ('device_id', 'action', 'timestamp', 'success')
+    list_filter = ('action', 'success', 'timestamp')
+    search_fields = ('device_id', 'notes')
+    date_hierarchy = 'timestamp' # Adiciona uma hierarquia de data para navegação
+    readonly_fields = ('timestamp',) # Garante que o timestamp não possa ser alterado no admin

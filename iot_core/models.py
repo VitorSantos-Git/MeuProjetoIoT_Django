@@ -193,6 +193,28 @@ class ComandoPendente(models.Model):
         return generated_count
 
 
+class AirConditionerLog(models.Model):
+    """
+    Registra o estado (ligado/desligado) de um ar condicionado IoT.
+    """
+    device_id = models.CharField(max_length=100, help_text="ID único do dispositivo IoT (ex: MAC, serial)")
+    action = models.CharField(
+        max_length=10,
+        choices=[('LIGAR', 'Ligar'), ('DESLIGAR', 'Desligar')],
+        help_text="Ação executada no ar condicionado"
+    )
+    timestamp = models.DateTimeField(auto_now_add=True, help_text="Data e hora da ação")
+    success = models.BooleanField(default=True, help_text="Indica se a ação foi bem-sucedida")
+    notes = models.TextField(blank=True, null=True, help_text="Observações adicionais (ex: erro, motivo)")
+
+    class Meta:
+        verbose_name = "Log do Ar Condicionado"
+        verbose_name_plural = "Logs do Ar Condicionado"
+        ordering = ['-timestamp'] # Ordena os logs do mais recente para o mais antigo
+
+    def __str__(self):
+        return f"{self.device_id} - {self.action} em {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} {'(Sucesso)' if self.success else '(Falha)'}"
+
 
 
 
