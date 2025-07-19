@@ -7,7 +7,7 @@
 #include <ArduinoJson.h> // Instale esta biblioteca via Gerenciador de Bibliotecas da IDE Arduino
 #include <IRremoteESP8266.h> // Instale esta biblioteca via Gerenciador de Bibliotecas da IDE Arduino
 #include <IRsend.h>         // Instale esta biblioteca via Gerenciador de Bibliotecas da IDE Arduino
-#include "pitches.h"  //Arquivos com notas musica
+#include "pitches.h"  //Arquivos com notas para musica
 #include "password_ssid.h"  //Arquivos rede wifi
 
 

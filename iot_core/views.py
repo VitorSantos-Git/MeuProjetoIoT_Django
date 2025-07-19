@@ -12,6 +12,16 @@ from django.utils.timezone import get_current_timezone
 import pytz     
 from django.conf import settings 
 
+from django.views.decorators.http import require_POST
+import requests # Para fazer requisições HTTP para o ESP8266
+import logging
+
+
+from .models import Dispositivo, DeviceState, AirConditionerLog # Importa Dispositivo
+from .DispositivoForm import DispositivoForm # Importa DispositivoForm
+
+logger = logging.getLogger(__name__) # Para logar erros/informações
+
 
 # Esta view retorna uma resposta HTTP simples.
 def home(request):
@@ -391,7 +401,207 @@ def gerenciar_dispositivos(request, device_name=None): # device_name agora pode 
         })
 
 
+# View para exibir a dashboard de dispositivos IoT
+def device_dashboard(request):
+    devices = Dispositivo.objects.filter(ativo=True) # Exibe apenas dispositivos ativos
+    
+    for device in devices:
+        # Pega o estado atual do dispositivo ou cria um novo se não existir
+        device.current_state, created = DeviceState.objects.get_or_create(device=device)
+    
+    form = DispositivoForm() # Formulário para adicionar novo dispositivo
 
+    context = {
+        'devices': devices,
+        'form': form,
+    }
+    return render(request, 'iot_core/device_dashboard.html', context)
 
+# View para adicionar um novo dispositivo IoT
 
+@require_POST
+def add_device(request):
+    form = DispositivoForm(request.POST) # Usa DispositivoForm
+    if form.is_valid():
+        device = form.save()
+        # Ao adicionar um novo dispositivo, inicialize seu estado como desligado
+        DeviceState.objects.get_or_create(device=device, defaults={'is_on': False})
+        messages.success(request, f'Dispositivo "{device.nome}" adicionado com sucesso!')
+    else:
+        for field, errors in form.errors.items():
+            for error in errors:
+                # CORREÇÃO DA INDENTAÇÃO E REMOÇÃO DA LINHA INCORRETA
+                error_message_prefix = ''
+                if field == "__all__":
+                    error_message_prefix = 'Erro geral: '
+                
+                # Esta é a linha correta, com a indentação ajustada
+                messages.error(request, f'Erro no campo {field}: {error_message_prefix}{error}')
+                
+                # REMOVA A LINHA ABAIXO (era a linha com o SyntaxError)
+                # messages.error(request, f'Erro no campo {field}: {% if field == "__all__" %}Erro geral: {% endif %}{error}') # Mensagem mais clara
+                
+    return redirect('device_dashboard')
 
+# View para remover um dispositivo IoT
+@require_POST
+def delete_device(request, device_id): # device_id aqui é a PK do Dispositivo
+    device = get_object_or_404(Dispositivo, pk=device_id) # Busca pelo PK
+    device_name = device.nome
+    device.delete()
+    messages.info(request, f'Dispositivo "{device_name}" removido.')
+    return redirect('device_dashboard')
+
+# View para enviar comando ON/OFF
+@require_POST
+def send_command(request):
+    device_pk = request.POST.get('device_pk')
+    command = request.POST.get('command') # 'ON' ou 'OFF'
+    
+    try:
+        device = get_object_or_404(Dispositivo, pk=device_pk)
+        
+        # Mapeia o comando 'ON'/'OFF' da UI para os comandos que o ESP espera
+        comando_para_esp = ""
+        action_log_text = ""
+        if command == 'ON':
+            comando_para_esp = "LIGAR_AR"
+            action_log_text = "LIGAR"
+        elif command == 'OFF':
+            comando_para_esp = "DESLIGAR_AR"
+            action_log_text = "DESLIGAR"
+        else:
+            return JsonResponse({'status': 'error', 'message': 'Comando inválido.'}, status=400)
+
+        # Cria um ComandoPendente no banco de dados para o ESP buscar
+        ComandoPendente.objects.create(
+            dispositivo=device,
+            comando=comando_para_esp,
+            data_execucao_agendada=datetime.now(), # Agora mesmo, para ser pego rapidamente
+            status='AGENDADO',
+            is_master_repetitive=False # Este não é um comando repetitivo mestre
+        )
+        
+        # O estado do DeviceState só será atualizado quando o ESP confirmar a execução.
+        # Por enquanto, podemos mostrar o estado "Pendente" ou simplesmente aguardar.
+        # Para a interface imediata, podemos otimisticamente assumir sucesso temporário.
+        # Mas o ideal é que a atualização do estado venha do ESP.
+
+        # Registra no log de ações (sucesso otimista para o envio do comando ao DB)
+        AirConditionerLog.objects.create(
+            device_name=device.nome,
+            action=action_log_text,
+            success=True, # Sucesso em agendar o comando no DB
+            notes=f"Comando '{comando_para_esp}' agendado para o dispositivo."
+        )
+
+        return JsonResponse({'status': 'success', 'message': 'Comando agendado com sucesso!'})
+    
+    except Dispositivo.DoesNotExist:
+        return JsonResponse({'status': 'error', 'message': 'Dispositivo não encontrado.'}, status=404)
+    except Exception as e:
+        logger.exception(f"Erro geral na view send_command ao agendar comando: {e}")
+        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
+# NOVA View: Endpoint para o ESP8266 buscar comandos pendentes
+def get_device_command(request, device_name):
+    try:
+        device = get_object_or_404(Dispositivo, nome=device_name)
+        
+        # Tenta encontrar o comando AGENDADO mais antigo para este dispositivo
+        # Que não seja um comando mestre de repetição (isso é para agendamento manual)
+        command_to_execute = ComandoPendente.objects.filter(
+            dispositivo=device, 
+            status='AGENDADO'
+        ).order_by('data_execucao_agendada').first()
+
+        if command_to_execute:
+            # Marca o comando como EXECUTADO (ou PENDENTE_EXECUTANDO se quiser um estado intermediário)
+            # É importante que o ESP envie a confirmação final!
+            # Por enquanto, vamos marcá-lo como EXECUTADO aqui para que não seja pego novamente imediatamente.
+            # O ESP ainda precisa enviar a confirmação para marcar como EXECUTADO/FALHOU.
+            # Vamos mudar isso: o ESP vai puxar e depois fazer um POST para atualizar o status.
+            # Por isso, apenas retornamos o comando aqui.
+
+            response_data = {
+                'status': 'sucesso',
+                'comando': command_to_execute.comando,
+                'id_comando': command_to_execute.id,
+                # 'parametros': {} # Se você tiver parâmetros adicionais no ComandoPendente
+            }
+            logger.info(f"Comando '{command_to_execute.comando}' enviado para {device_name}.")
+            return JsonResponse(response_data)
+        else:
+            return JsonResponse({'status': 'sucesso', 'comando': 'NENHUM_COMANDO', 'id_comando': 0})
+            
+    except Dispositivo.DoesNotExist:
+        return JsonResponse({'status': 'erro', 'message': 'Dispositivo não encontrado.'}, status=404)
+    except Exception as e:
+        logger.exception(f"Erro ao buscar comandos para {device_name}: {e}")
+        return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
+
+# NOVA View: Endpoint para o ESP8266 atualizar o status de um comando
+@require_POST
+def update_command_status(request):
+    try:
+        data = json.loads(request.body)
+        comando_id = data.get('comando_id')
+        status_msg = data.get('status') # Ex: 'EXECUTADO', 'FALHOU', 'ATRASADO'
+
+        if not comando_id or not status_msg:
+            return JsonResponse({'status': 'erro', 'message': 'Dados incompletos.'}, status=400)
+
+        command_obj = get_object_or_404(ComandoPendente, pk=comando_id)
+        
+        # Validar status_msg contra ComandoPendente.STATUS_CHOICES
+        valid_statuses = [choice[0] for choice in ComandoPendente.STATUS_CHOICES]
+        if status_msg not in valid_statuses:
+            return JsonResponse({'status': 'erro', 'message': 'Status inválido.'}, status=400)
+
+        command_obj.status = status_msg
+        command_obj.data_execucao_real = datetime.now() # Atualiza a hora da execução real
+        command_obj.save()
+
+        # Opcional: Atualizar o DeviceState e logar se for um comando de LIGAR/DESLIGAR AR
+        if command_obj.comando in ["LIGAR_AR", "DESLIGAR_AR"]:
+            device_state, created = DeviceState.objects.get_or_create(device=command_obj.dispositivo)
+            if status_msg == "EXECUTADO":
+                device_state.is_on = (command_obj.comando == "LIGAR_AR")
+                device_state.save()
+            
+            # Registrar no AirConditionerLog o resultado final
+            AirConditionerLog.objects.create(
+                device_name=command_obj.dispositivo.nome,
+                action="LIGAR" if command_obj.comando == "LIGAR_AR" else "DESLIGAR",
+                success=(status_msg == "EXECUTADO"),
+                notes=f"Comando via ESP: {status_msg}"
+            )
+
+        logger.info(f"Comando ID {comando_id} para {command_obj.dispositivo.nome} atualizado para {status_msg}.")
+        return JsonResponse({'status': 'sucesso', 'message': 'Status do comando atualizado.'})
+    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'erro', 'message': 'Corpo da requisição inválido (JSON esperado).'}, status=400)
+    except ComandoPendente.DoesNotExist:
+        return JsonResponse({'status': 'erro', 'message': 'Comando não encontrado.'}, status=404)
+    except Exception as e:
+        logger.exception(f"Erro ao atualizar status do comando: {e}")
+        return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
+    
+
+@csrf_exempt # Use isto se você espera requisições POST sem token CSRF, comum em APIs de IoT
+def receive_sensor_data(request):
+    if request.method == 'POST':
+        # Aqui você processaria os dados recebidos do sensor
+        # Por exemplo, se os dados vierem em JSON:
+        try:
+            import json
+            data = json.loads(request.body)
+            # Faça algo com 'data'
+            print(f"Dados do sensor recebidos: {data}")
+            return JsonResponse({'status': 'success', 'message': 'Dados recebidos'}, status=200)
+        except json.JSONDecodeError:
+            return JsonResponse({'status': 'error', 'message': 'JSON inválido'}, status=400)
+    return JsonResponse({'status': 'error', 'message': 'Método não permitido'}, status=405)
+
+# ... (Suas outras views)

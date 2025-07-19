@@ -1,71 +1,51 @@
 # iot_core/admin.py
 
 from django.contrib import admin
-from .models import Dispositivo, LeituraSensor, ComandoPendente, AirConditionerLog  # Importe o seu modelo Dispositivo
 from django.utils import timezone
 from datetime import datetime 
+from .models import Dispositivo, ComandoPendente, LeituraSensor, DeviceState, AirConditionerLog
 
-
-@admin.register(LeituraSensor)
-class LeituraSensorAdmin(admin.ModelAdmin):
-    list_display = ('dispositivo', 'temperatura', 'umidade', 'timestamp')
-    search_fields = ('nome',)
-
-# Registre o modelo Dispositivo se ainda não o fez
+# SEU REGISTRO EXISTENTE: DispositivoAdmin
 @admin.register(Dispositivo)
 class DispositivoAdmin(admin.ModelAdmin):
-    list_display = ('nome', 'descricao', 'ultima_atualizacao')
-    search_fields = ('nome',)
+    list_display = ('nome', 'ip_endereco', 'ativo', 'ultima_atualizacao')
+    list_filter = ('ativo',)
+    search_fields = ('nome', 'ip_endereco', 'descricao')
+    # fields = ('nome', 'descricao', 'ip_endereco', 'porta', 'ativo') # Campos que você quer editar
+    # readonly_fields = ('data_cadastro', 'ultima_atualizacao') # Campos somente leitura
 
-# Crie uma classe Admin customizada para ComandoPendente
+# SEU REGISTRO EXISTENTE: ComandoPendenteAdmin
 @admin.register(ComandoPendente)
 class ComandoPendenteAdmin(admin.ModelAdmin):
-    list_display = ('dispositivo', 'comando', 'data_execucao_agendada', 'executado', 'data_execucao_real', 'is_master_repetitive', 'tipo_repeticao')
-    list_filter = ('executado', 'is_master_repetitive', 'tipo_repeticao', 'dispositivo')
-    search_fields = ('comando', 'parametros', 'dispositivo__nome')
-    date_hierarchy = 'data_execucao_agendada' # Ajuda na navegação por data
+    list_display = ('dispositivo', 'comando', 'data_execucao_agendada', 'status', 'is_master_repetitive', 'tipo_repeticao')
+    list_filter = ('status', 'tipo_repeticao', 'is_master_repetitive', 'dispositivo')
+    search_fields = ('dispositivo__nome', 'comando', 'repetitive_command_id')
+    date_hierarchy = 'data_execucao_agendada'
+    # Campos que não devem ser editáveis diretamente após a criação
+    readonly_fields = ('data_execucao_real',) # Pode precisar de ajustes dependendo do seu fluxo de execução
 
-    # Adicione campos para o formulário de adição/edição no Admin
-    fieldsets = (
-        (None, {
-            'fields': ('dispositivo', 'comando', 'parametros', 'data_execucao_agendada')
-        }),
-        ('Configurações de Repetição', {
-            'fields': ('is_master_repetitive', 'tipo_repeticao', 'dias_da_semana', 'data_fim_repeticao'),
-            'classes': ('collapse',), # Opcional: faz a seção ser recolhível
-        }),
-        ('Status de Execução', {
-            'fields': ('executado', 'data_execucao_real'),
-            'classes': ('collapse',),
-        }),
-    )
+# SEU REGISTRO EXISTENTE: LeituraSensorAdmin
+@admin.register(LeituraSensor)
+class LeituraSensorAdmin(admin.ModelAdmin):
+    list_display = ('dispositivo', 'tipo_sensor', 'valor', 'unidade', 'timestamp')
+    list_filter = ('dispositivo', 'tipo_sensor', 'unidade')
+    search_fields = ('dispositivo__nome', 'tipo_sensor')
+    date_hierarchy = 'timestamp'
+    readonly_fields = ('timestamp',)
 
-    def save_model(self, request, obj, form, change):
-        # Este método é chamado quando um objeto ComandoPendente é salvo no Admin.
+# NOVO REGISTRO ADMIN para DeviceState
+@admin.register(DeviceState)
+class DeviceStateAdmin(admin.ModelAdmin):
+    list_display = ('device', 'is_on', 'last_updated')
+    list_filter = ('is_on',)
+    readonly_fields = ('last_updated',)
+    search_fields = ('device__nome', 'device__ip_endereco')
 
-        # Se a data_execucao_agendada não for aware, torne-a aware no fuso horário do projeto.
-        # Isso é crucial para garantir que os dados sejam salvos corretamente em UTC pelo Django.
-        if obj.data_execucao_agendada and timezone.is_naive(obj.data_execucao_agendada):
-            # O Django Admin geralmente pega o input datetime-local como naive.
-            # Tornamos ele aware no TIME_ZONE do settings.
-            obj.data_execucao_agendada = timezone.make_aware(
-                obj.data_execucao_agendada, 
-                timezone.get_current_timezone()
-            )
-
-
-        # Chame o método save_model original para realmente salvar o objeto
-        super().save_model(request, obj, form, change)
-
-    # Se você tiver um filtro 'split_and_map_weekday_names', ele precisaria ser importado
-    # ou a lógica para 'dias_da_semana' no Admin talvez precise de um custom widget/field.
-    # Por enquanto, focamos na data/hora.
-
-# Crie uma classe Admin customizada para EstadoDoAr
+# NOVO REGISTRO ADMIN para AirConditionerLog
 @admin.register(AirConditionerLog)
 class AirConditionerLogAdmin(admin.ModelAdmin):
-    list_display = ('device_id', 'action', 'timestamp', 'success')
+    list_display = ('device_name', 'action', 'timestamp', 'success')
     list_filter = ('action', 'success', 'timestamp')
-    search_fields = ('device_id', 'notes')
-    date_hierarchy = 'timestamp' # Adiciona uma hierarquia de data para navegação
-    readonly_fields = ('timestamp',) # Garante que o timestamp não possa ser alterado no admin
+    search_fields = ('device_name', 'notes')
+    date_hierarchy = 'timestamp'
+    readonly_fields = ('timestamp',)

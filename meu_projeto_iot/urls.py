@@ -19,5 +19,6 @@ from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('iot/', include('iot_core.urls')),
+    path('', include('iot_core.urls')),
+    # Ou path('iot/', include('iot_core.urls')),
 ]
