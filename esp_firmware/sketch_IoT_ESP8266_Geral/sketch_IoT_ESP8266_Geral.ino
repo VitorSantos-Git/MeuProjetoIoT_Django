@@ -7,6 +7,9 @@
 #include <ArduinoJson.h> // Instale esta biblioteca via Gerenciador de Bibliotecas da IDE Arduino
 #include <IRremoteESP8266.h> // Instale esta biblioteca via Gerenciador de Bibliotecas da IDE Arduino
 #include <IRsend.h>         // Instale esta biblioteca via Gerenciador de Bibliotecas da IDE Arduino
+#include "pitches.h"  //Arquivos com notas musica
+#include "password_ssid.h"  //Arquivos rede wifi
+
 
 //Pinagem do ESP8266 Pinos Digitais (GPIO):
 #define D0 16
@@ -27,12 +30,14 @@
 // //RST - Reset
 // //EN (ou CH_PD) - Habilitação do chip (ativo em nível alto) 
 
-// --- Configurações de Rede ---
-const char* ssid = "IFSP-LAB";       // Seu nome de rede Wi-Fi
-const char* password = "%mf*GP-10RpGm";  // Sua senha do Wi-Fi
+
+// --- Configurações de Rede --- 
+const char* ssid = txtssid;       // Seu nome de rede Wi-Fi
+const char* password = txtpassword;  // Sua senha do Wi-Fi
 
 // --- Configurações do Servidor Django ---
-const char* djangoHost = "10.123.71.216"; // O IP do seu computador onde o Django está rodando (ex: 192.168.1.100)
+//const char* djangoHost = "10.123.71.216"; // O IP do seu computador onde o Django está rodando (ex: 192.168.1.100)
+const char* djangoHost = "192.168.31.80"; // O IP do seu computador onde o Django está rodando (ex: 192.168.1.100)
 const int djangoPort = 8000;              // A porta do Django (padrão 8000)
 const char* deviceName = "Meu_ESP_Teste"; // O nome do dispositivo cadastrado no Django Admin
 
@@ -47,22 +52,22 @@ uint16_t rawData3[233] = {848, 17754,  3272, 8744,  728, 266,  750, 1248,  760, 
 
 
 // --- Configurações do DHT11 ---
-#define DHTPIN D2     // Pino digital onde o DHT11 está conectado (GPIO4 no NodeMCU)
+#define DHTPIN D3     // Pino digital onde o DHT11 está conectado (GPIO4 no NodeMCU)
 #define DHTTYPE DHT11 // Tipo de sensor (DHT11 ou DHT22)
 DHT dht(DHTPIN, DHTTYPE);
 
 // --- Configurações do IR ---
 #define frequencia 38 // kHz
-const int kIrLed = D1; // Pino do LED IR (GPIO5 no NodeMCU)
+const int kIrLed = D2; // Pino do LED IR (GPIO4 no NodeMCU)
 IRsend irsend(kIrLed); // Objeto para enviar sinais IR
 
 // --- Configurações do Buzzer ---
-const int buzzerPin = D3; // Pino do Buzzer (GPIO0 no NodeMCU)
+const int buzzerPin = D1; // Pino do Buzzer (GPIO5 no NodeMCU)
 
 // --- Configurações dos Botões ---
 const int btnLigarPin = D5;    // Pino do botão Ligar (GPIO14)
 const int btnDesligarPin = D6; // Pino do botão Desligar (GPIO12)
-const int btnVentilacaoPin = D7; // Pino do botão Ventilação (GPIO13)
+const int btnVentilacaoPin = D7; // Pino do botão Ventilação (GPIO2)
 
 // --- Variáveis de Controle ---
 unsigned long lastSendMillis = 0;
@@ -90,6 +95,10 @@ void setup() {
   // Configura o pino do buzzer como OUTPUT
   pinMode(buzzerPin, OUTPUT);
   digitalWrite(buzzerPin, LOW); // Garante que o buzzer esteja desligado no início
+  
+  // Configura o pino do LED
+  pinMode(LED_BUILTIN, OUTPUT);
+  digitalWrite(LED_BUILTIN, LOW); // Garante que esteja desligado no início
 
   Serial.print("Conectando-se a ");
   Serial.println(ssid);
@@ -143,6 +152,7 @@ void loop() {
   if (millis() - lastCommandCheckMillis >= commandCheckInterval) {
       checkDjangoCommands();
       lastCommandCheckMillis = millis();
+      digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
   }
 
   // --- Leitura dos Botões e Envio de Comandos IR ---
@@ -199,7 +209,7 @@ void sendSensorData(float temperature, float humidity) {
   serverPath += djangoHost;
   serverPath += ":";
   serverPath += djangoPort;
-  serverPath += "/iot/receber_dados_sensor/";
+  serverPath += "/iot/receber_dados_sensor/"; 
 
   Serial.print("[HTTP] Enviando dados para: ");
   Serial.println(serverPath);
@@ -287,26 +297,32 @@ void checkDjangoCommands() {
       // --- Lógica para executar o comando recebido ---
       if (strcmp(comandoRecebido, "LIGAR_AR") == 0) {
         irsend.sendRaw(rawData1, sizeof(rawData1) / sizeof(rawData1[0]), frequencia);
-        tone(buzzerPin, 1500, 200); // Bip de confirmação
+        //tone(buzzerPin, 1500, 200); // Bip de confirmação
         Serial.println("Comando LIGAR_AR executado.");
         enviarConfirmacaoComando(comando_id, "executado_sucesso");
       } else if (strcmp(comandoRecebido, "DESLIGAR_AR") == 0) {
         irsend.sendRaw(rawData2, sizeof(rawData2) / sizeof(rawData2[0]), frequencia);
-        tone(buzzerPin, 1500, 200);
+        //tone(buzzerPin, 1500, 200);
         Serial.println("Comando DESLIGAR_AR executado.");
         enviarConfirmacaoComando(comando_id, "executado_sucesso");
       } else if (strcmp(comandoRecebido, "VENTILACAO_AR") == 0) {
         irsend.sendRaw(rawData3, sizeof(rawData3) / sizeof(rawData3[0]), frequencia);
-        tone(buzzerPin, 1500, 200);
+        //tone(buzzerPin, 1500, 200);
         Serial.println("Comando VENTILACAO_AR executado.");
         enviarConfirmacaoComando(comando_id, "executado_sucesso");
       } else if (strcmp(comandoRecebido, "BUZZER_ON") == 0) {
-        digitalWrite(buzzerPin, HIGH);
+        //digitalWrite(buzzerPin, HIGH);
+        tone(buzzerPin, 4186); //NOTE_C8  
         Serial.println("Buzzer Ligado.");
         enviarConfirmacaoComando(comando_id, "executado_sucesso");
       } else if (strcmp(comandoRecebido, "BUZZER_OFF") == 0) {
+        noTone(buzzerPin);
         digitalWrite(buzzerPin, LOW);
         Serial.println("Buzzer Desligado.");
+        enviarConfirmacaoComando(comando_id, "executado_sucesso");
+      } else if (strcmp(comandoRecebido, "MUSICA") == 0) {
+        musica();
+        Serial.println("Musica Ligado.");
         enviarConfirmacaoComando(comando_id, "executado_sucesso");
       } else {
             Serial.print("Comando desconhecido: ");
@@ -364,3 +380,44 @@ void enviarConfirmacaoComando(int comandoId, const char* statusMsg) {
   }
   http.end();
 }
+
+
+int melody[] = {
+  NOTE_B4, NOTE_B5, NOTE_FS5, NOTE_DS5,
+  NOTE_B5, NOTE_FS5, NOTE_DS5, NOTE_C5,
+  NOTE_C6, NOTE_G6, NOTE_E6, NOTE_C6, NOTE_G6, NOTE_E6,
+  
+  NOTE_B4, NOTE_B5, NOTE_FS5, NOTE_DS5, NOTE_B5,
+  NOTE_FS5, NOTE_DS5, NOTE_DS5, NOTE_E5, NOTE_F5,
+  NOTE_F5, NOTE_FS5, NOTE_G5, NOTE_G5, NOTE_GS5, NOTE_A5, NOTE_B5
+};
+
+int durations[] = {
+  16, 16, 16, 16,
+  32, 16, 8, 16,
+  16, 16, 16, 32, 16, 8,
+  
+  16, 16, 16, 16, 32,
+  16, 8, 32, 32, 32,
+  32, 32, 32, 32, 32, 16, 8
+};
+
+void musica(){
+ int size = sizeof(durations) / sizeof(int);
+
+  for (int note = 0; note < size; note++) {
+    //to calculate the note duration, take one second divided by the note type.
+    //e.g. quarter note = 1000 / 4, eighth note = 1000/8, etc.
+    int duration = 1000 / durations[note];
+    tone(buzzerPin, melody[note], duration);
+
+    //to distinguish the notes, set a minimum time between them.
+    //the note's duration + 30% seems to work well:
+    int pauseBetweenNotes = duration * 1.30;
+    delay(pauseBetweenNotes);
+    
+    //stop the tone playing:
+    noTone(buzzerPin);
+  }  
+} 
+

@@ -59,6 +59,7 @@ db.sqlite3 # O seu arquivo de banco de dados SQLite!
 *.map
 *.obj
 *.s
+*.h
 /.pio/
 /build/
 /.vscode/

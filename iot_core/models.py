@@ -214,7 +214,5 @@ class AirConditionerLog(models.Model):
 
     def __str__(self):
         return f"{self.device_id} - {self.action} em {self.timestamp.strftime('%Y-%m-%d %H:%M:%S')} {'(Sucesso)' if self.success else '(Falha)'}"
-
-
-
-
+    
+  
