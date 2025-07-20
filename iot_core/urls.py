@@ -2,6 +2,8 @@
 
 from django.urls import path
 from . import views # Importa as views da sua app
+from django.contrib.auth import views as auth_views # Importe as views de autenticação
+
 
 urlpatterns = [
     path('', views.home, name='home'), # Exemplo: uma página inicial para a app
@@ -17,5 +19,6 @@ urlpatterns = [
     path('comando/<str:device_name>/get/', views.get_device_command, name='get_device_command'),
     path('comando/<str:device_name>/send/', views.enviar_comando_dispositivo, name='enviar_comando_dispositivo'),
     path('atualizar_status_comando/', views.update_command_status, name='update_command_status'),
+    path('logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
 ]
 

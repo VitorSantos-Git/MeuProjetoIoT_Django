@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Controle de Dispositivos IoT</title>
@@ -242,13 +243,35 @@
 </head>
 <body>
     <header>
-        <img src="https://logodownload.org/wp-content/uploads/2018/06/instituto-federal-logo-if-3.png" alt="Instituto Federal Logo" class="logo-img">
+        <img src={% static 'img/LogoIFSPCMP.png' %} alt="Instituto Federal Logo" class="logo-img">
         <h1>Controle de Dispositivos IoT</h1>
         <nav class="nav-links">
-            <a href="#">BEM-VINDO(A)! ADMIN:</a>
-            <a href="/admin/">IR P/ SITE</a> {# Link para o Admin, ajuste se necessário #}
-            <a href="#">ALTERAR SENHA</a>
-            <a href="#">ENCERRAR SESSÃO</a>
+            <span>BEM-VINDO(A)! 
+                {% if user.is_authenticated %}  {# Ou {{ user.get_full_name|upper ou user.username|upper }} se preferir o nome completo ou login #}
+                    {{ user.first_name|upper }}: 
+                {% else %}
+                    VISITANTE: 
+                {% endif %}
+            </span>
+           <!--  <a href="/admin/">IR P/ SITE</a> {# Link para o Admin, ajuste se necessário #} -->
+           <!-- <a href="#">ALTERAR SENHA</a> -->
+           <form action="{% url 'logout' %}" method="post" style="display: inline;"> {# display: inline para não quebrar o layout #}
+                {% csrf_token %}
+                <button type="submit" style="
+                    background: none;
+                    border: none;
+                    padding: 0;
+                    font: inherit;
+                    cursor: pointer;
+                    color: white; /* Cor do texto do link */
+                    text-decoration: none; /* Sem sublinhado por padrão */
+                    margin-left: 20px;
+                    font-weight: 500;
+                    transition: text-decoration 0.2s ease;
+                " onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                    ENCERRAR SESSÃO
+                </button>
+            </form>
         </nav>
     </header>
 
