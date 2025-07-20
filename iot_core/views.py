@@ -4,20 +4,23 @@ from django.shortcuts import render, get_object_or_404, redirect # Importe get_o
 from django.http import HttpResponse, JsonResponse # Importe JsonResponse
 from django.views.decorators.csrf import csrf_exempt # Para desabilitar o CSRF temporariamente para a API
 import json # Para lidar com JSON
-from .models import Dispositivo, LeituraSensor, ComandoPendente # Importe o novo modelo LeituraSensor
+#from .models import Dispositivo, LeituraSensor, ComandoPendente # Importe o novo modelo LeituraSensor
+from .models import Dispositivo, ComandoPendente, DeviceState, LeituraSensor, AirConditionerLog
 from django.utils import timezone # Importe timezone para timestamps
 from django.contrib import messages # Importe messages para feedback ao usuário
 from datetime import datetime, timedelta, date
 from django.utils.timezone import get_current_timezone
 import pytz     
 from django.conf import settings 
-
+from django.contrib.auth.decorators import login_required, permission_required
+from django.contrib.auth import views as auth_views
+from django.contrib.auth import logout
 from django.views.decorators.http import require_POST
 import requests # Para fazer requisições HTTP para o ESP8266
 import logging
 
 
-from .models import Dispositivo, DeviceState, AirConditionerLog # Importa Dispositivo
+#from .models import Dispositivo, DeviceState, AirConditionerLog # Importa Dispositivo
 from .DispositivoForm import DispositivoForm # Importa DispositivoForm
 
 logger = logging.getLogger(__name__) # Para logar erros/informações
@@ -31,6 +34,8 @@ def home(request):
     return render(request, 'iot_core/home.html')
 # >>>>>>>>>>>>>>> FIM DA NOVA FUNÇÃO HOME <<<<<<<<<<<<<<<<
 
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @csrf_exempt # IMPORTANTE: Desabilita a proteção CSRF para esta view. Use com cautela em produção!
 def receber_dados_sensor(request):
     if request.method == 'POST':
@@ -88,6 +93,8 @@ def receber_dados_sensor(request):
         return JsonResponse({"status": "erro", "mensagem": "Método não permitido"}, status=405)
 
 # view para enviar comandos ao dispositivo
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @csrf_exempt # Também desabilitamos o CSRF aqui por ser uma API para o ESP8266
 def enviar_comando_dispositivo(request, device_name):
     dispositivo = get_object_or_404(Dispositivo, nome=device_name)
@@ -177,6 +184,8 @@ def enviar_comando_dispositivo(request, device_name):
     return JsonResponse({"status": "erro", "mensagem": "Método de requisição não permitido."}, status=405)
 
 
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 def gerenciar_dispositivos(request, device_name=None): # device_name agora pode ser None para a URL base
     dispositivos = Dispositivo.objects.all().order_by('nome')
     feedback_message = None
@@ -438,6 +447,8 @@ def gerenciar_dispositivos(request, device_name=None): # device_name agora pode 
 
 
 # View para exibir a dashboard de dispositivos IoT
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 def device_dashboard(request):
     # Pega todos os dispositivos ativos
     devices = Dispositivo.objects.filter(ativo=True)
@@ -489,6 +500,8 @@ def device_dashboard(request):
 
 
 # View para adicionar um novo dispositivo IoT
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @require_POST
 def add_device(request):
     form = DispositivoForm(request.POST) # Usa DispositivoForm
@@ -515,6 +528,8 @@ def add_device(request):
 
 
 # View para remover um dispositivo IoT
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @require_POST
 def delete_device(request, device_id): # device_id aqui é a PK do Dispositivo
     device = get_object_or_404(Dispositivo, pk=device_id) # Busca pelo PK
@@ -525,10 +540,8 @@ def delete_device(request, device_id): # device_id aqui é a PK do Dispositivo
 
 
 # View para enviar comando ON/OFF
-# iot_core/views.py
-
-# ... (imports)
-
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @csrf_exempt
 @require_POST
 def send_command(request):
@@ -563,7 +576,10 @@ def send_command(request):
         logger.exception(f"Erro ao agendar comando: {e}")
         return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
 
+
 # NOVA View: Endpoint para o ESP8266 buscar comandos pendentes
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 def get_device_command(request, device_name):
     try:
         device = get_object_or_404(Dispositivo, nome=device_name)
@@ -602,6 +618,8 @@ def get_device_command(request, device_name):
 
 
 # NOVA View: Endpoint para o ESP8266 atualizar o status de um comando
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @csrf_exempt
 @require_POST
 def update_command_status(request):
@@ -651,7 +669,8 @@ def update_command_status(request):
         return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
     
 
-
+@login_required
+@permission_required('iot_core.view_dispositivo', raise_exception=True)
 @csrf_exempt
 @require_POST
 def receive_sensor_data(request):
