@@ -20,5 +20,6 @@ urlpatterns = [
     path('comando/<str:device_name>/send/', views.enviar_comando_dispositivo, name='enviar_comando_dispositivo'),
     path('atualizar_status_comando/', views.update_command_status, name='update_command_status'),
     path('logout/', auth_views.LogoutView.as_view(next_page='/'), name='logout'),
+    path('login/', auth_views.LoginView.as_view(template_name='iot_core/login.html'), name='login'),
 ]
 

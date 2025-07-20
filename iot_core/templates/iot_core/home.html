@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    {% load static %}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bem-vindo ao IoT Control</title>
+    <style>
+        /* Estilos Globais (copiados do dashboard para consistência) */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* Cabeçalho */
+        header {
+            background-color: #28a745; /* Verde do IF */
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        header .nav-links a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            font-weight: 500;
+        }
+        header .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .logo-img {
+            height: 40px; /* Ajuste o tamanho do logo conforme necessário */
+            margin-right: 15px;
+        }
+
+        /* Container Principal da Home */
+        .home-container {
+            flex-grow: 1;
+            padding: 30px;
+            max-width: 800px; /* Um pouco menor que o dashboard */
+            margin: 50px auto; /* Mais espaço em cima/baixo */
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .home-container h2 {
+            color: #28a745;
+            margin-bottom: 30px;
+            font-size: 2em;
+        }
+
+        .button-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr; /* Duas colunas para os botões */
+            gap: 20px;
+            margin-top: 30px;
+            width: 100%; /* Ocupa a largura total do container */
+            max-width: 500px; /* Limita a largura máxima dos botões */
+        }
+
+        .home-button {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 8px;
+            font-size: 1.2em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s ease, transform 0.2s ease;
+            text-decoration: none; /* Para links que parecem botões */
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .home-button.login {
+            background-color: #007bff; /* Azul */
+        }
+        .home-button.login:hover {
+            background-color: #0056b3;
+            transform: translateY(-2px);
+        }
+
+        .home-button.dashboard {
+            background-color: #6c757d; /* Cinza */
+        }
+        .home-button.dashboard:hover {
+            background-color: #5a6268;
+            transform: translateY(-2px);
+        }
+
+        /* Estilos para futuros botões - exemplo */
+        .home-button.future-button {
+            background-color: #ffc107; /* Amarelo */
+            color: #333;
+        }
+        .home-button.future-button:hover {
+            background-color: #e0a800;
+        }
+
+        /* Responsividade básica */
+        @media (max-width: 600px) {
+            .button-grid {
+                grid-template-columns: 1fr; /* Uma coluna em telas pequenas */
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <img src="{% static 'img/LogoIFSPCMP.png' %}" alt="Instituto Federal Logo" class="logo-img">
+        <h1>Controle de Dispositivos IoT</h1>
+        <nav class="nav-links">
+            <span>BEM-VINDO(A)! 
+                {% if user.is_authenticated %}
+                    {{ user.username|upper }}:
+                {% else %}
+                    VISITANTE:
+                {% endif %}
+            </span>
+            <a href="/admin/">IR P/ SITE</a> {# Link para o Admin #}
+            {% if user.is_authenticated %}
+                <form action="{% url 'logout' %}" method="post" style="display: inline;">
+                    {% csrf_token %}
+                    <button type="submit" style="
+                        background: none;
+                        border: none;
+                        padding: 0;
+                        font: inherit;
+                        cursor: pointer;
+                        color: white;
+                        text-decoration: none;
+                        margin-left: 20px;
+                        font-weight: 500;
+                        transition: text-decoration 0.2s ease;
+                    " onmouseover="this.style.textDecoration='underline'" onmouseout="this.style.textDecoration='none'">
+                        ENCERRAR SESSÃO
+                    </button>
+                </form>
+            {% endif %}
+        </nav>
+    </header>
+
+    <div class="home-container">
+        <h2>Gerencie seus Dispositivos IoT de forma inteligente!</h2>
+        <p>Acesse o dashboard para controlar seus dispositivos ou faça login para gerenciar suas configurações.</p>
+
+        <div class="button-grid">
+            {% if not user.is_authenticated %} {# Só mostra o botão de login se não estiver logado #}
+                <a href="{% url 'login' %}" class="home-button login">Fazer Login</a>
+            {% endif %}
+            <a href="{% url 'dashboard' %}" class="home-button dashboard">Acessar Dashboard</a>
+            
+            {# Espaço para futuros botões #}
+            {# <a href="#" class="home-button future-button">Outra Página 1</a> #}
+            {# <a href="#" class="home-button future-button">Outra Página 2</a> #}
+        </div>
+    </div>
+</body>
+</html>

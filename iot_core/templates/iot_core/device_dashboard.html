@@ -285,7 +285,7 @@
                         <h2>{{ dispositivo_data.obj.nome }}</h2>
                         <p><span class="info-label">Tipo:</span> {{ dispositivo_data.obj.modelo }}</p>
                         <p><span class="info-label">IP/MAC:</span> {{ dispositivo_data.obj.endereco_ip_mac }}</p>
-                        <p><span class="info-label">Situação do Ar:</span> 
+                        <p><span class="info-label">Situação:</span> 
                             <span id="status-{{ dispositivo_data.obj.id }}" 
                                   class="status-indicator {% if dispositivo_data.is_on %}status-on{% else %}status-off{% endif %}">
                                 {% if dispositivo_data.is_on %}LIGADO{% else %}DESLIGADO{% endif %}
