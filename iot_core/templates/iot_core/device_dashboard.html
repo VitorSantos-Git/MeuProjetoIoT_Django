@@ -1,246 +1,389 @@
-{% extends "admin/base_site.html" %} {# Extendendo seu base_site.html customizado #}
-{% load static %}
-
-{% block title %}Controle de IoT{% endblock %}
-
-{% block branding %}
-    <h1 id="site-name">Controle de Dispositivos IoT</h1>
-{% endblock %}
-
-{% block content %}
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Controle de Dispositivos IoT</title>
     <style>
-        /* Estilos para a dashboard */
-        .device-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* Colunas responsivas */
-            gap: 20px;
-            margin-top: 20px;
+        /* Estilos Globais */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
         }
 
-        .device-card {
-            background-color: #fff;
-            border: 1px solid #ddd;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-            padding: 20px;
+        /* Cabeçalho */
+        header {
+            background-color: #28a745; /* Verde do IF */
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        header h1 {
+            margin: 0;
+            font-size: 24px;
+        }
+        header .nav-links a {
+            color: white;
+            text-decoration: none;
+            margin-left: 20px;
+            font-weight: 500;
+        }
+        header .nav-links a:hover {
+            text-decoration: underline;
+        }
+        .logo-img {
+            height: 40px; /* Ajuste o tamanho do logo conforme necessário */
+            margin-right: 15px;
+        }
+
+        /* Container Principal do Dashboard */
+        .dashboard-container {
+            flex-grow: 1;
+            padding: 30px;
+            max-width: 1200px;
+            margin: 20px auto;
+            background-color: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+        }
+
+        .dashboard-container h1 {
+            color: #28a745; /* Verde do IF para o título principal */
+            margin-bottom: 20px;
             text-align: center;
         }
 
-        .device-card h3 {
+        .dashboard-container p.message {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #666;
+            font-size: 1.1em;
+        }
+
+        /* Layout dos Cards de Dispositivo */
+        .devices-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); /* 300px min width for cards */
+            gap: 25px;
+            margin-bottom: 40px;
+        }
+
+        .device-card {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 20px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center; /* Center content horizontally */
+            text-align: center; /* Center text */
+            transition: transform 0.2s ease-in-out;
+        }
+
+        .device-card:hover {
+            transform: translateY(-5px);
+        }
+
+        .device-card h2 {
             margin-top: 0;
             color: #333;
+            font-size: 1.5em;
+            margin-bottom: 15px;
         }
 
-        .device-status {
-            font-size: 1.2em;
-            font-weight: bold;
-            margin: 15px 0;
-            padding: 8px;
-            border-radius: 5px;
-            display: inline-block; /* Para o background se ajustar ao texto */
-            min-width: 100px;
+        .device-card p {
+            margin-bottom: 8px;
+            font-size: 0.95em;
         }
 
-        .status-ligado {
-            background-color: #e6ffe6; /* Verde claro */
-            color: #28a745; /* Verde escuro */
-            border: 1px solid #28a745;
-        }
-
-        .status-desligado {
-            background-color: #ffe6e6; /* Vermelho claro */
-            color: #dc3545; /* Vermelho escuro */
-            border: 1px solid #dc3545;
-        }
-
-        .device-actions button {
-            padding: 10px 20px;
-            margin: 5px;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-            transition: background-color 0.3s ease;
-        }
-
-        .device-actions .btn-on {
-            background-color: #28a745; /* Verde */
-            color: white;
-        }
-        .device-actions .btn-on:hover {
-            background-color: #218838;
-        }
-
-        .device-actions .btn-off {
-            background-color: #dc3545; /* Vermelho */
-            color: white;
-        }
-        .device-actions .btn-off:hover {
-            background-color: #c82333;
-        }
-
-        .device-actions .btn-delete {
-            background-color: #6c757d; /* Cinza */
-            color: white;
-            font-size: 0.8em;
-            padding: 5px 10px;
-            margin-top: 10px;
-        }
-        .device-actions .btn-delete:hover {
-            background-color: #5a6268;
-        }
-
-        /* Estilos para o formulário de adicionar dispositivo */
-        .add-device-form {
-            background-color: #f8f8f8;
-            border: 1px solid #eee;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 30px;
-        }
-        .add-device-form label {
-            display: block;
-            margin-bottom: 5px;
+        .info-label {
             font-weight: bold;
             color: #555;
+            margin-right: 5px;
         }
-        .add-device-form input[type="text"],
-        .add-device-form textarea,
-        .add-device-form input[type="number"] { /* Adicionado para input de número */
-            width: calc(100% - 20px);
-            padding: 8px 10px;
+
+        .sensor-data {
+            margin: 15px 0;
+            font-size: 1.1em;
+            color: #444;
+        }
+        .sensor-data span {
+            font-weight: bold;
+            color: #007bff; /* Azul para valores de sensor */
+        }
+
+        .status-area {
+            display: flex;
+            align-items: center;
             margin-bottom: 15px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            font-size: 1.1em;
         }
-        .add-device-form button[type="submit"] {
-            background-color: #007bff; /* Azul padrão */
+        .status-area .info-label {
+            margin-right: 10px;
+        }
+
+        /* Botões de Status */
+        .status-indicator {
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-weight: bold;
             color: white;
+            display: inline-block;
+            min-width: 90px; /* Para manter o tamanho consistente */
+        }
+        .status-on {
+            background-color: #28a745; /* Verde */
+        }
+        .status-off {
+            background-color: #dc3545; /* Vermelho */
+        }
+
+        /* Grupo de Botões (ON/OFF) */
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        .control-button {
             padding: 10px 20px;
             border: none;
-            border-radius: 5px;
+            border-radius: 25px;
             cursor: pointer;
             font-weight: bold;
+            font-size: 1em;
+            transition: background-color 0.2s ease;
         }
-        .add-device-form button[type="submit"]:hover {
+        .control-button.on {
+            background-color: #007bff; /* Azul */
+            color: white;
+        }
+        .control-button.on:hover {
             background-color: #0056b3;
         }
-
-        .messages {
-            list-style: none;
-            padding: 0;
-            margin: 20px 0 0 0;
+        .control-button.off {
+            background-color: #6c757d; /* Cinza */
+            color: white;
         }
-        .messages li {
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
+        .control-button.off:hover {
+            background-color: #5a6268;
+        }
+        .control-button.remove {
+            background-color: #ffc107; /* Amarelo */
+            color: #333;
+        }
+        .control-button.remove:hover {
+            background-color: #e0a800;
+        }
+
+        /* Seção Adicionar Novo Dispositivo */
+        .add-device-section {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: 40px;
+            box-shadow: 0 3px 10px rgba(0,0,0,0.05);
+        }
+        .add-device-section h2 {
+            margin-top: 0;
+            color: #28a745;
+            text-align: center;
+            margin-bottom: 25px;
+        }
+        .add-device-section form p {
+            margin-bottom: 15px;
+        }
+        .add-device-section label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #555;
+        }
+        .add-device-section input[type="text"],
+        .add-device-section textarea,
+        .add-device-section input[type="number"] {
+            width: calc(100% - 22px);
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            font-size: 1em;
+            box-sizing: border-box; /* Inclui padding e border na largura total */
+        }
+        .add-device-section input[type="checkbox"] {
+            margin-right: 8px;
+        }
+        .add-device-section button[type="submit"] {
+            background-color: #007bff;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1.1em;
             font-weight: bold;
+            width: 100%;
+            margin-top: 20px;
+            transition: background-color 0.2s ease;
         }
-        .messages .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
-        .messages .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
-        .messages .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
-
+        .add-device-section button[type="submit"]:hover {
+            background-color: #0056b3;
+        }
     </style>
+</head>
+<body>
+    <header>
+        <img src="https://logodownload.org/wp-content/uploads/2018/06/instituto-federal-logo-if-3.png" alt="Instituto Federal Logo" class="logo-img">
+        <h1>Controle de Dispositivos IoT</h1>
+        <nav class="nav-links">
+            <a href="#">BEM-VINDO(A)! ADMIN:</a>
+            <a href="/admin/">IR P/ SITE</a> {# Link para o Admin, ajuste se necessário #}
+            <a href="#">ALTERAR SENHA</a>
+            <a href="#">ENCERRAR SESSÃO</a>
+        </nav>
+    </header>
 
-    <h1>Gerenciar Dispositivos IoT</h1>
+    <div class="dashboard-container">
+        <p class="message">{{ mensagem }}</p>
 
-    {# Mensagens do Django #}
-    {% if messages %}
-        <ul class="messages">
-            {% for message in messages %}
-                <li{% if message.tags %} class="{{ message.tags }}"{% endif %}>{{ message }}</li>
-            {% endfor %}
-        </ul>
-    {% endif %}
+        <div class="devices-grid">
+            {% if devices_data %}
+                {% for dispositivo_data in devices_data %}
+                    <div class="device-card">
+                        <h2>{{ dispositivo_data.obj.nome }}</h2>
+                        <p><span class="info-label">Tipo:</span> {{ dispositivo_data.obj.modelo }}</p>
+                        <p><span class="info-label">IP/MAC:</span> {{ dispositivo_data.obj.endereco_ip_mac }}</p>
+                        <p><span class="info-label">Situação do Ar:</span> 
+                            <span id="status-{{ dispositivo_data.obj.id }}" 
+                                  class="status-indicator {% if dispositivo_data.is_on %}status-on{% else %}status-off{% endif %}">
+                                {% if dispositivo_data.is_on %}LIGADO{% else %}DESLIGADO{% endif %}
+                            </span>
+                        </p>
+                        
+                        <div class="sensor-data">
+                            <p><span class="info-label">Temperatura:</span> <span>{{ dispositivo_data.ultima_temperatura }}</span></p>
+                            <p><span class="info-label">Umidade:</span> <span>{{ dispositivo_data.ultima_umidade }}</span></p>
+                        </div>
 
-    <div class="device-grid">
-        {% for device in devices %} {# 'devices' agora são objetos Dispositivo #}
-        <div class="device-card" id="device-{{ device.id }}">
-            <h3>{{ device.nome }} (IP: {{ device.ip_endereco }}:{{ device.porta }})</h3> {# Exibe o nome, IP e porta do Dispositivo #}
-            <p>{{ device.descricao }}</p>
-            <div class="device-status">
-                <span id="status-{{ device.id }}" class="{% if device.current_state.is_on %}status-ligado{% else %}status-desligado{% endif %}">
-                    {{ device.current_state|default_if_none:"N/A"|yesno:"LIGADO,DESLIGADO" }}
-                </span>
-                <br>
-                <small>Última atualização: <span id="last-updated-{{ device.id }}">{{ device.current_state.last_updated|date:"d/m/Y H:i:s" }}</span></small>
-            </div>
-            <div class="device-actions">
-                {# Use data-device-pk para enviar a PK do Dispositivo para a view #}
-                <button class="btn-on" data-device-pk="{{ device.id }}">ON</button>
-                <button class="btn-off" data-device-pk="{{ device.id }}">OFF</button>
-                <form action="{% url 'delete_device' device.id %}" method="post" style="display:inline;">
-                    {% csrf_token %}
-                    <button type="submit" class="btn-delete" onclick="return confirm('Tem certeza que deseja remover {{ device.nome }}?');">Remover</button>
-                </form>
-            </div>
+                        <div class="button-group">
+                            <button class="control-button on"
+                                    onclick="toggleDevice({{ dispositivo_data.obj.id }}, '{{ dispositivo_data.obj.nome }}', true)">
+                                Ligar
+                            </button>
+                            <button class="control-button off"
+                                    onclick="toggleDevice({{ dispositivo_data.obj.id }}, '{{ dispositivo_data.obj.nome }}', false)">
+                                Desligar
+                            </button>
+                            <button class="control-button remove"
+                                    onclick="removeDevice({{ dispositivo_data.obj.id }}, '{{ dispositivo_data.obj.nome }}')">
+                                Remover
+                            </button>
+                        </div>
+                    </div>
+                {% endfor %}
+            {% else %}
+                <p style="grid-column: 1 / -1; text-align: center;">Nenhum dispositivo ativo cadastrado ainda. Adicione um abaixo!</p>
+            {% endif %}
         </div>
-        {% empty %}
-        <p>Nenhum dispositivo IoT cadastrado. Adicione um abaixo!</p>
-        {% endfor %}
+
+        <div class="add-device-section">
+            <h2>Adicionar Novo Dispositivo IoT</h2>
+            <form method="post" action="{% url 'add_device' %}">
+                {% csrf_token %}
+                {{ form.as_p }}
+                <button type="submit">Adicionar Dispositivo</button>
+            </form>
+        </div>
     </div>
 
-    <div class="add-device-form">
-        <h2>Adicionar Novo Dispositivo IoT</h2>
-        <form action="{% url 'add_device' %}" method="post">
-            {% csrf_token %}
-            {{ form.as_p }} {# Renderiza os campos do formulário como parágrafos #}
-            <button type="submit">Adicionar Dispositivo</button>
-        </form>
-    </div>
-
-    {# Script JavaScript para lidar com o envio de comandos via AJAX #}
     <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            const sendCommandButtons = document.querySelectorAll('.device-actions button:not(.btn-delete)');
-            const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        function toggleDevice(deviceId, deviceName, turnOn) {
+            const command = turnOn ? "LIGAR_AR" : "DESLIGAR_AR";
+            console.log(`Enviando comando '${command}' para ${deviceName} (ID: ${deviceId})`);
 
-            sendCommandButtons.forEach(button => {
-                button.addEventListener('click', function() {
-                    const devicePk = this.dataset.devicePk; // Agora pegamos o PK
-                    const command = this.textContent.trim(); // 'ON' ou 'OFF'
-
-                    fetch('{% url "send_command" %}', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/x-www-form-urlencoded',
-                            'X-CSRFToken': csrfToken
-                        },
-                        body: `device_pk=${devicePk}&command=${command}` // Envia o PK
-                    })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.status === 'success') {
-                            const statusElement = document.getElementById(`status-${devicePk}`);
-                            const lastUpdatedElement = document.getElementById(`last-updated-${devicePk}`);
-                            
-                            if (data.is_on) {
-                                statusElement.textContent = 'LIGADO';
-                                statusElement.className = 'device-status status-ligado';
-                            } else {
-                                statusElement.textContent = 'DESLIGADO';
-                                statusElement.className = 'device-status status-desligado';
-                            }
-                            // Atualizar a hora da última atualização
-                            const now = new Date();
-                            const formattedDate = `${('0' + now.getDate()).slice(-2)}/${('0' + (now.getMonth() + 1)).slice(-2)}/${now.getFullYear()} ${('0' + now.getHours()).slice(-2)}:${('0' + now.getMinutes()).slice(-2)}:${('0' + now.getSeconds()).slice(-2)}`;
-                            lastUpdatedElement.textContent = formattedDate;
-
-                            console.log(`Comando ${command} para dispositivo PK=${devicePk} enviado com sucesso!`);
-                        } else {
-                            alert('Erro ao enviar comando: ' + data.message);
-                            console.error('Erro:', data.message);
-                        }
-                    })
-                    .catch(error => {
-                        alert('Ocorreu um erro na requisição: ' + error);
-                        console.error('Erro na requisição:', error);
-                    });
-                });
+            fetch('/send-command/', { // Garanta que esta URL está configurada em urls.py
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': getCookie('csrftoken')
+                },
+                body: JSON.stringify({
+                    device_id: deviceId,
+                    command: command,
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                console.log('Resposta do servidor:', data);
+                if (data.status === 'sucesso') {
+                    alert(`Comando '${command}' enviado com sucesso para ${deviceName}!`);
+                    // Opcional: Atualizar a interface do usuário sem recarregar a página
+                    // Se o ESP atualizar o status, o melhor é puxar o estado de volta do backend
+                    // Por enquanto, uma atualização simples visual:
+                    const statusSpan = document.getElementById(`status-${deviceId}`);
+                    if (statusSpan) {
+                        statusSpan.textContent = turnOn ? 'LIGADO' : 'DESLIGADO';
+                        statusSpan.classList.toggle('status-on', turnOn);
+                        statusSpan.classList.toggle('status-off', !turnOn);
+                    }
+                } else {
+                    alert(`Erro ao enviar comando: ${data.message}`);
+                }
+            })
+            .catch(error => {
+                console.error('Erro na requisição:', error);
+                alert('Erro na requisição para o servidor.');
             });
-        });
-    </script>
-{% endblock %}
+        }
 
-{% block nav-global %}{% endblock %}
+        function removeDevice(deviceId, deviceName) {
+            if (confirm(`Tem certeza que deseja remover o dispositivo '${deviceName}'?`)) {
+                fetch(`/delete-device/${deviceId}/`, { // Garanta que esta URL está configurada em urls.py
+                    method: 'POST', // Usamos POST para delete para enviar CSRF token
+                    headers: {
+                        'X-CSRFToken': getCookie('csrftoken')
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'sucesso') {
+                        alert(data.message);
+                        location.reload(); // Recarrega a página para remover o card
+                    } else {
+                        alert(`Erro ao remover dispositivo: ${data.message}`);
+                    }
+                })
+                .catch(error => {
+                    console.error('Erro na requisição de remoção:', error);
+                    alert('Erro na requisição para remover o dispositivo.');
+                });
+            }
+        }
+
+        // Função para obter o cookie CSRF
+        function getCookie(name) {
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
+                    }
+                }
+            }
+            return cookieValue;
+        }
+    </script>
+</body>
+</html>

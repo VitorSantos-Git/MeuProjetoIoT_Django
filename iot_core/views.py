@@ -435,19 +435,56 @@ def gerenciar_dispositivos(request, device_name=None): # device_name agora pode 
 
 # View para exibir a dashboard de dispositivos IoT
 def device_dashboard(request):
-    devices = Dispositivo.objects.filter(ativo=True) # Exibe apenas dispositivos ativos
+    # Pega todos os dispositivos ativos
+    devices = Dispositivo.objects.filter(ativo=True)
     
+    devices_data = [] # Lista para armazenar todos os dados que serão passados para o template
+
     for device in devices:
         # Pega o estado atual do dispositivo ou cria um novo se não existir
-        device.current_state, created = DeviceState.objects.get_or_create(device=device)
+        device_state, created = DeviceState.objects.get_or_create(device=device)
+
+        # Obter a última leitura de TEMPERATURA para este dispositivo
+        ultima_temperatura_leitura = LeituraSensor.objects.filter(
+            dispositivo=device, # Usamos 'device' da iteração
+            tipo_sensor='Temperatura' # OU 'temperatura', verifique o que seu ESP envia
+        ).order_by('-timestamp').first()
+
+        # Obter a última leitura de UMIDADE para este dispositivo
+        ultima_umidade_leitura = LeituraSensor.objects.filter(
+            dispositivo=device, # Usamos 'device' da iteração
+            tipo_sensor='Umidade' # OU 'umidade', verifique o que seu ESP envia
+        ).order_by('-timestamp').first()
+
+        # Formata as leituras, verificando se a leitura existe antes de acessar .valor ou .unidade
+        formatted_temperatura = 'N/A'
+        if ultima_temperatura_leitura:
+            formatted_temperatura = f"{ultima_temperatura_leitura.valor}{ultima_temperatura_leitura.unidade or '°C'}" # Adicionei um default para unidade
+
+        formatted_umidade = 'N/A'
+        if ultima_umidade_leitura:
+            formatted_umidade = f"{ultima_umidade_leitura.valor}{ultima_umidade_leitura.unidade or '%'}" # Adicionei um default para unidade
+
+        devices_data.append({
+            'obj': device,
+            'current_state': device_state, # Passa o objeto DeviceState
+            'ultima_temperatura': formatted_temperatura,
+            'ultima_umidade': formatted_umidade,
+            'is_on': device_state.is_on, # Redundante com current_state.is_on, mas mantido para clareza no template
+        })
     
     form = DispositivoForm() # Formulário para adicionar novo dispositivo
 
     context = {
-        'devices': devices,
+        'devices_data': devices_data, # Renomeei para evitar conflito e ser mais descritivo
         'form': form,
+        'mensagem': 'Bem-vindo ao dashboard interativo dos seus dispositivos IoT!' # Mensagem geral
     }
+    
     return render(request, 'iot_core/device_dashboard.html', context)
+
+
+
 
 
 # View para adicionar um novo dispositivo IoT
@@ -487,56 +524,43 @@ def delete_device(request, device_id): # device_id aqui é a PK do Dispositivo
 
 
 # View para enviar comando ON/OFF
+# iot_core/views.py
+
+# ... (imports)
+
+@csrf_exempt
 @require_POST
 def send_command(request):
-    device_pk = request.POST.get('device_pk')
-    command = request.POST.get('command') # 'ON' ou 'OFF'
-    
     try:
-        device = get_object_or_404(Dispositivo, pk=device_pk)
-        
-        # Mapeia o comando 'ON'/'OFF' da UI para os comandos que o ESP espera
-        comando_para_esp = ""
-        action_log_text = ""
-        if command == 'ON':
-            comando_para_esp = "LIGAR_AR"
-            action_log_text = "LIGAR"
-        elif command == 'OFF':
-            comando_para_esp = "DESLIGAR_AR"
-            action_log_text = "DESLIGAR"
-        else:
-            return JsonResponse({'status': 'error', 'message': 'Comando inválido.'}, status=400)
+        data = json.loads(request.body)
+        device_id = data.get('device_id') # <--- Aqui ele espera o ID do dispositivo
+        command_type = data.get('command')
 
-        # Cria um ComandoPendente no banco de dados para o ESP buscar
+        if not device_id or not command_type:
+            return JsonResponse({'status': 'erro', 'message': 'ID do dispositivo ou tipo de comando ausente.'}, status=400)
+
+        dispositivo = get_object_or_404(Dispositivo, pk=device_id) # <--- Ele busca pelo ID (pk)
+
+        # Crie um novo ComandoPendente
         ComandoPendente.objects.create(
-            dispositivo=device,
-            comando=comando_para_esp,
-            data_execucao_agendada=timezone.now(), # Agora mesmo, para ser pego rapidamente
-            status='AGENDADO',
-            is_master_repetitive=False # Este não é um comando repetitivo mestre
+            dispositivo=dispositivo,
+            comando=command_type,
+            tipo_repeticao='UNICA',
+            data_execucao_agendada=timezone.now(),
+            status='AGENDADO'
         )
-        
-        # O estado do DeviceState só será atualizado quando o ESP confirmar a execução.
-        # Por enquanto, podemos mostrar o estado "Pendente" ou simplesmente aguardar.
-        # Para a interface imediata, podemos otimisticamente assumir sucesso temporário.
-        # Mas o ideal é que a atualização do estado venha do ESP.
+        logger.info(f"Comando '{command_type}' agendado para o dispositivo '{dispositivo.nome}'.")
+        return JsonResponse({'status': 'sucesso', 'message': 'Comando agendado com sucesso!'})
 
-        # Registra no log de ações (sucesso otimista para o envio do comando ao DB)
-        AirConditionerLog.objects.create(
-            device_name=device.nome,
-            action=action_log_text,
-            success=True, # Sucesso em agendar o comando no DB
-            notes=f"Comando '{comando_para_esp}' agendado para o dispositivo."
-        )
-
-        return JsonResponse({'status': 'success', 'message': 'Comando agendado com sucesso!'})
-    
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'erro', 'message': 'Corpo da requisição inválido (JSON esperado).'}, status=400)
     except Dispositivo.DoesNotExist:
-        return JsonResponse({'status': 'error', 'message': 'Dispositivo não encontrado.'}, status=404)
+        # O erro que você está vendo!
+        print(f"Erro: Dispositivo com ID {device_id} não encontrado ao tentar agendar comando.")
+        return JsonResponse({'status': 'erro', 'message': 'Dispositivo não encontrado.'}, status=404)
     except Exception as e:
-        logger.exception(f"Erro geral na view send_command ao agendar comando: {e}")
-        return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
-
+        logger.exception(f"Erro ao agendar comando: {e}")
+        return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
 
 # NOVA View: Endpoint para o ESP8266 buscar comandos pendentes
 def get_device_command(request, device_name):
@@ -626,18 +650,49 @@ def update_command_status(request):
         return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
     
 
-@csrf_exempt # Use isto se você espera requisições POST sem token CSRF, comum em APIs de IoT
-def receive_sensor_data(request):
-    if request.method == 'POST':
-        # Aqui você processaria os dados recebidos do sensor
-        # Por exemplo, se os dados vierem em JSON:
-        try:
-            import json
-            data = json.loads(request.body)
-            # Faça algo com 'data'
-            print(f"Dados do sensor recebidos: {data}")
-            return JsonResponse({'status': 'success', 'message': 'Dados recebidos'}, status=200)
-        except json.JSONDecodeError:
-            return JsonResponse({'status': 'error', 'message': 'JSON inválido'}, status=400)
-    return JsonResponse({'status': 'error', 'message': 'Método não permitido'}, status=405)
 
+@csrf_exempt
+@require_POST
+def receive_sensor_data(request):
+    try:
+        data = json.loads(request.body)
+        device_name = data.get('dispositivo')
+        temperatura = data.get('temperatura')
+        umidade = data.get('umidade')
+
+        if not device_name:
+            return JsonResponse({'status': 'erro', 'message': 'Nome do dispositivo ausente.'}, status=400)
+
+        dispositivo = get_object_or_404(Dispositivo, nome=device_name) # <- Aqui ele busca pelo NOME do dispositivo, não ID
+
+        # Criar leitura para TEMPERATURA, se disponível
+        if temperatura is not None:
+            LeituraSensor.objects.create(
+                dispositivo=dispositivo,
+                tipo_sensor='Temperatura', # <-- Tipo de sensor. Precisa ser 'Temperatura'
+                valor=temperatura,
+                unidade='°C'
+            )
+
+        # Criar leitura para UMIDADE, se disponível
+        if umidade is not None:
+            LeituraSensor.objects.create(
+                dispositivo=dispositivo,
+                tipo_sensor='Umidade', # <-- Tipo de sensor. Precisa ser 'Umidade'
+                valor=umidade,
+                unidade='%'
+            )
+
+        print(f"Dados do sensor recebidos: {data}")
+
+        return JsonResponse({'status': 'sucesso', 'message': 'Dados do sensor recebidos e salvos.'})
+
+    except json.JSONDecodeError:
+        return JsonResponse({'status': 'erro', 'message': 'Corpo da requisição inválido (JSON esperado).'}, status=400)
+    except Dispositivo.DoesNotExist:
+        # Este erro significa que o 'device_name' enviado pelo ESP não corresponde a nenhum dispositivo cadastrado
+        print(f"Erro: Dispositivo '{device_name}' não encontrado ao receber dados do sensor.")
+        return JsonResponse({'status': 'erro', 'message': f'Dispositivo "{device_name}" não encontrado.'}, status=404)
+    except Exception as e:
+        logger.exception(f"Erro ao receber dados do sensor: {e}")
+        return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
