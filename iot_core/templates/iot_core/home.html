@@ -107,6 +107,14 @@
             transform: translateY(-2px);
         }
 
+        .home-button.admin-button {
+            background-color: #f0ad4e; /* Amarelo/Laranja - cor comum para admin */
+        }
+        .home-button.admin-button:hover {
+            background-color: #ec971f;
+            transform: translateY(-2px);
+        }
+
         /* Estilos para futuros botões - exemplo */
         .home-button.future-button {
             background-color: #ffc107; /* Amarelo */
@@ -115,6 +123,8 @@
         .home-button.future-button:hover {
             background-color: #e0a800;
         }
+
+        
 
         /* Responsividade básica */
         @media (max-width: 600px) {
@@ -131,12 +141,11 @@
         <nav class="nav-links">
             <span>BEM-VINDO(A)! 
                 {% if user.is_authenticated %}
-                    {{ user.username|upper }}:
+                    {{ user.username|upper }}: 
                 {% else %}
-                    VISITANTE:
+                    VISITANTE: 
                 {% endif %}
             </span>
-            <a href="/admin/">IR P/ SITE</a> {# Link para o Admin #}
             {% if user.is_authenticated %}
                 <form action="{% url 'logout' %}" method="post" style="display: inline;">
                     {% csrf_token %}
@@ -160,14 +169,23 @@
     </header>
 
     <div class="home-container">
-        <h2>Gerencie seus Dispositivos IoT de forma inteligente!</h2>
-        <p>Acesse o dashboard para controlar seus dispositivos ou faça login para gerenciar suas configurações.</p>
+        <h2>Gerencie seus Dispositivos</h2>
+        <p>-Faça o Login -</p>
 
         <div class="button-grid">
             {% if not user.is_authenticated %} {# Só mostra o botão de login se não estiver logado #}
                 <a href="{% url 'login' %}" class="home-button login">Fazer Login</a>
             {% endif %}
-            <a href="{% url 'dashboard' %}" class="home-button dashboard">Acessar Dashboard</a>
+            {% if user.is_authenticated %} {# Só mostra o botão se estiver logado #}
+            <a href="{% url 'device_dashboard' %}" class="home-button dashboard">Acessar Dashboard</a>
+            
+
+            {# NOVO BOTÃO: Ir para Admin #}
+            
+            <a href="{% url 'admin:index' %}" class="home-button admin-button">Ir para Admin</a>
+            {# Você precisará adicionar estilos CSS para 'admin-button' #}
+            {% endif %}
+            
             
             {# Espaço para futuros botões #}
             {# <a href="#" class="home-button future-button">Outra Página 1</a> #}

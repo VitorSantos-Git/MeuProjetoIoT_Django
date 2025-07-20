@@ -11,4 +11,7 @@ urlpatterns = [
     # Você pode definir next_page para onde o usuário será redirecionado após o logout
     path('logout/', auth_views.LogoutView.as_view(next_page='/home'), name='logout'),
 
+    # Adicionar as URLs do allauth
+    path('accounts/', include('allauth.urls')),
+
 ]

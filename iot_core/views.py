@@ -23,9 +23,13 @@ from .DispositivoForm import DispositivoForm # Importa DispositivoForm
 logger = logging.getLogger(__name__) # Para logar erros/informações
 
 
-# Esta view retorna uma resposta HTTP simples.
+# >>>>>>>>>>>>>>> NOVA FUNÇÃO HOME AQUI <<<<<<<<<<<<<<<<
 def home(request):
-    return HttpResponse("Olá do projeto IoT com Django! Esta é a página inicial da sua app 'iot_core'.")
+    """
+    Renderiza a página inicial do projeto com os botões.
+    """
+    return render(request, 'iot_core/home.html')
+# >>>>>>>>>>>>>>> FIM DA NOVA FUNÇÃO HOME <<<<<<<<<<<<<<<<
 
 @csrf_exempt # IMPORTANTE: Desabilita a proteção CSRF para esta view. Use com cautela em produção!
 def receber_dados_sensor(request):
@@ -482,9 +486,6 @@ def device_dashboard(request):
     }
     
     return render(request, 'iot_core/device_dashboard.html', context)
-
-
-
 
 
 # View para adicionar um novo dispositivo IoT

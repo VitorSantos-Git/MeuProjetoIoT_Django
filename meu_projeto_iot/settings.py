@@ -39,6 +39,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+
+    # Adicionar apps do django-allauth
+    'django.contrib.sites', # Requerido por allauth
+    'allauth',
+    'allauth.account',
+    'allauth.socialaccount',
+    # Adicione provedores de OAuth que você quer usar (ex: Google, SUAP)
+    'allauth.socialaccount.providers.google',
+    # 'allauth.socialaccount.providers.github', # Exemplo para GitHub
 ]
 
 MIDDLEWARE = [
@@ -47,6 +56,9 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'django.contrib.messages.middleware.MessageMiddleware',
+    'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'allauth.account.middleware.AccountMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -127,3 +139,40 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+LOGIN_REDIRECT_URL = 'home' # Redireciona para a URL nomeada 'home' após o login
+LOGOUT_REDIRECT_URL = 'home' # Garante que o logout também redirecione para 'home'
+
+# Configurações do allauth (personalize conforme necessário)
+ACCOUNT_LOGOUT_REDIRECT_URL = 'home' # O allauth usa sua própria variável para logout
+ACCOUNT_AUTHENTICATION_METHOD = 'username_email' # Permite login com username ou email
+ACCOUNT_EMAIL_REQUIRED = True
+ACCOUNT_EMAIL_VERIFICATION = 'none' # 'mandatory' para exigir verificação, 'optional', 'none'
+ACCOUNT_SIGNUP_PASSWORD_ENTER_TWICE = True
+ACCOUNT_USERNAME_REQUIRED = True
+SOCIALACCOUNT_QUERY_EMAIL = True # Tenta buscar o email do provedor social
+SOCIALACCOUNT_PROVIDERS = {
+    'google': {
+        'APP': {
+            'client_id': 'SEU_CLIENT_ID_GOOGLE', # <<--- MUDE ISTO
+            'secret': 'SEU_CLIENT_SECRET_GOOGLE', # <<--- MUDE ISTO
+            'key': '' # Ignorar por enquanto
+        },
+        'SCOPE': [ # Opcional: permissões adicionais
+            'profile',
+            'email',
+        ],
+        'AUTH_PARAMS': { # Parâmetros de autenticação adicionais (ex: forçar re-aprovação)
+            'access_type': 'offline',
+        }
+    }
+}
+
+SITE_ID = 1
+
+AUTHENTICATION_BACKENDS = (
+    # Requerido por allauth (autenticação por username e email)
+    'allauth.account.auth_backends.AuthenticationBackend',
+    # Django padrão (autenticação por username)
+    'django.contrib.auth.backends.ModelBackend',
+)

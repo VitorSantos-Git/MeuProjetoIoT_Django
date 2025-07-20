@@ -2,6 +2,7 @@
 <!DOCTYPE html>
 <html lang="pt-br">
 <head>
+    {% load static %}
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login</title>
@@ -13,19 +14,93 @@
         .login-container label { display: block; margin-bottom: 5px; font-weight: bold; }
         .login-container input[type="text"],
         .login-container input[type="password"] { width: calc(100% - 22px); padding: 10px; border: 1px solid #ccc; border-radius: 4px; }
-        .login-container button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; width: 100%; }
+        .login-container button { background-color: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; font-size: 1em; width: 100%; margin-top: 10px; }
         .login-container button:hover { background-color: #0056b3; }
         .errorlist { color: red; list-style-type: none; padding: 0; margin-top: 5px; }
+
+        .social-login-separator {
+            margin: 20px 0;
+            position: relative;
+            text-align: center;
+        }
+        .social-login-separator::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            border-top: 1px solid #eee;
+            z-index: 1;
+        }
+        .social-login-separator span {
+            background-color: white;
+            padding: 0 10px;
+            position: relative;
+            z-index: 2;
+            color: #888;
+        }
+        .social-button {
+            display: block;
+            width: 100%;
+            padding: 10px;
+            margin-top: 15px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            background-color: white;
+            color: #333;
+            text-decoration: none;
+            font-size: 1em;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .social-button.google {
+            border-color: #db4437; /* Cor da borda do Google */
+            color: #db4437; /* Cor do texto do Google */
+        }
+        .social-button.google:hover {
+            background-color: #db4437;
+            color: white;
+        }
+        .social-button img {
+            width: 20px;
+            height: 20px;
+            margin-right: 10px;
+        }
     </style>
 </head>
 <body>
-    <div class="login-container">
-        <h2>Login</h2>
-        <form method="post">
-            {% csrf_token %}
-            {{ form.as_p }}
-            <button type="submit">Entrar</button>
-        </form>
+   {# iot_core/templates/iot_core/login.html #}
+<div class="login-container">
+    <h2>Login</h2>
+    <form method="post" action="{% url 'login' %}"> {# <-- Mudei de volta para 'login' #}
+        {% csrf_token %}
+        {% if form.errors %}
+            <ul class="errorlist">
+                {% for field, errors in form.errors.items %}
+                    {% for error in errors %}
+                        <li>{{ error }}</li>
+                    {% endfor %}
+                {% endfor %}
+            </ul>
+        {% endif %}
+
+        {{ form.as_p }} {# <-- ISSO VAI GERAR OS CAMPOS E LABELS CORRETOS #}
+
+        <button type="submit">Entrar</button>
+    </form>
+
+    <div class="social-login-separator">
+        <span>OU Fazer login com</span>
     </div>
+
+    <a href="https://moodle.cmp.ifsp.edu.br/auth/oauth2/login.php?id=2&wantsurl=https%3A%2F%2Fmoodle.cmp.ifsp.edu.br%2F&sesskey=2rj9ukvEjS" class="social-button">
+        <img src="{% static 'img/LogoIFSPCMP.png' %}" alt="Google Logo"> LOGIN SUAP
+    </a>
+
+    <!-- <p style="margin-top: 20px; font-size: 0.9em;">Não tem uma conta? <a href="{% url 'account_signup' %}">Cadastre-se</a></p>-->
+</div>
 </body>
 </html>
