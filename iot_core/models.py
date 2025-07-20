@@ -7,7 +7,7 @@ from datetime import timedelta, date, datetime
 
 # SEU MODELO EXISTENTE: Dispositivo
 class Dispositivo(models.Model):
-    nome = models.CharField(max_length=100, unique=True, help_text="Nome único para identificar o dispositivo (ex: 'ESP8266_Sala').")
+    nome = models.CharField(max_length=100, unique=True, help_text="Nome único para identificar o dispositivo (ex: 'Sala_B106').")
     descricao = models.TextField(blank=True, null=True, help_text="Descrição opcional do dispositivo e sua localização.")
     ip_endereco = models.GenericIPAddressField(unique=True, help_text="Endereço IP do dispositivo na rede local.")
     porta = models.IntegerField(default=80, help_text="Porta HTTP que o dispositivo está escutando (geralmente 80).")
@@ -101,7 +101,7 @@ class AirConditionerLog(models.Model):
     Registra o estado (ligado/desligado) de um ar condicionado IoT.
     """
     # Usaremos o nome do Dispositivo como identificador aqui
-    device_name = models.CharField(max_length=100, null=True, blank=True, help_text="Nome do dispositivo IoT (ex: Ar Sala, Ar Quarto)")
+    device_name = models.CharField(max_length=100, null=True, blank=True, help_text="Nome do dispositivo IoT (ex: Sala B106, Ar Quarto)")
     action = models.CharField(
         max_length=10,
         choices=[('LIGAR', 'Ligar'), ('DESLIGAR', 'Desligar')],

@@ -94,7 +94,9 @@ def enviar_comando_dispositivo(request, device_name):
         # e cuja data/hora de execução agendada JÁ PASSOU ou É AGORA.
         comando_pendente = ComandoPendente.objects.filter(
             dispositivo=dispositivo,
-            executado=False,
+            # Campo 'executado' foi removido e substituído por 'status'.
+            # Usamos 'status' para identificar comandos pendentes.
+            status='AGENDADO', # <--- CORREÇÃO AQUI: Usar 'status' em vez de 'executado'
             data_execucao_agendada__lte=timezone.now() # <-- Nova condição: data agendada <= agora
         ).order_by('data_execucao_agendada').first() # Pega o mais antigo primeiro
 
@@ -103,7 +105,13 @@ def enviar_comando_dispositivo(request, device_name):
             response_data = {
                 "status": "sucesso",
                 "comando": comando_pendente.comando,
-                "parametros": json.loads(comando_pendente.parametros) if comando_pendente.parametros else {}, # Garante que seja um dict
+                # Removendo 'parametros' daqui. Se você removeu o campo 'parametros' do modelo ComandoPendente
+                # como indicado na saída do makemigrations, esta linha causaria um AttributeError.
+                # Se o campo 'parametros' AINDA EXISTE, mantenha-o.
+                # Pela sua saída do makemigrations, 'parametros' FOI REMOVIDO.
+                # Se você realmente precisa de parâmetros, precisará reintroduzi-los no modelo e migrar.
+                # Por enquanto, vou COMENTAR/REMOVER esta linha para evitar outro erro.
+                # "parametros": json.loads(comando_pendente.parametros) if comando_pendente.parametros else {}, # Garante que seja um dict
                 "dispositivo": dispositivo.nome,
                 "id_comando": comando_pendente.id # Adiciona o ID do comando para o ESP poder reportar a execução
             }
@@ -122,24 +130,48 @@ def enviar_comando_dispositivo(request, device_name):
         try:
             data = json.loads(request.body)
             comando_id = data.get('comando_id') # Esperamos o ID do comando agora
-            status_execucao = data.get('status', 'sucesso') # Status de execução reportado pelo ESP
-
+            status_execucao = data.get('status_execucao', 'sucesso') # <--- Mudei para 'status_execucao' para evitar conflito com campo 'status' do modelo
+            
             if comando_id:
                 comando = get_object_or_404(ComandoPendente, id=comando_id, dispositivo=dispositivo)
-                comando.executado = True
+                
+                # Campo 'executado' foi removido. Agora atualizamos o campo 'status'.
+                # Baseado no 'status_execucao' recebido do ESP, definimos o status do comando.
+                if status_execucao == 'sucesso':
+                    comando.status = 'EXECUTADO' # <--- CORREÇÃO AQUI: Usar 'status' em vez de 'executado'
+                else:
+                    comando.status = 'FALHOU' # Ou outro status apropriado para falha
+                
                 comando.data_execucao_real = timezone.now() # Registra a hora real de execução
                 comando.save()
-                print(f"Comando ID {comando_id} '{comando.comando}' marcado como executado para '{device_name}'. Status: {status_execucao}")
-                return JsonResponse({"status": "sucesso", "mensagem": "Comando marcado como executado."})
+                print(f"Comando ID {comando_id} '{comando.comando}' marcado com status '{comando.status}' para '{device_name}'.")
+                
+                # Se este for um comando mestre repetitivo, agendar o próximo
+                if comando.is_master_repetitive:
+                    # Chame a função de agendamento do próximo comando aqui
+                    # Exemplo: agendar_proximo_comando_repetitivo(comando)
+                    print(f"Comando mestre repetitivo concluído. Próximo agendamento necessário.")
+                    # Você precisará implementar a lógica de agendamento aqui ou chamar uma função helper.
+                    # Por exemplo, uma função para criar a próxima instância do comando agendado.
+                    # Isso dependeria da sua lógica para 'DIARIO', 'SEMANAL', etc.
+
+                return JsonResponse({"status": "sucesso", "mensagem": "Comando marcado como executado/falho."})
             else:
                 return JsonResponse({"status": "erro", "mensagem": "ID do comando não fornecido na confirmação."}, status=400)
 
         except json.JSONDecodeError:
+            print(f"Erro: JSON inválido no corpo da requisição POST do ESP.")
             return JsonResponse({"status": "erro", "mensagem": "JSON inválido no corpo da requisição."}, status=400)
+        except ComandoPendente.DoesNotExist:
+            print(f"Erro: ComandoPendete ID {data.get('comando_id')} não encontrado para {device_name}.")
+            return JsonResponse({"status": "erro", "mensagem": "Comando não encontrado para atualização."}, status=404)
         except Exception as e:
-            print(f"Erro ao processar confirmação de comando do ESP: {e}")
+            print(f"Erro inesperado ao processar confirmação de comando do ESP para {device_name}: {e}")
             return JsonResponse({"status": "erro", "mensagem": f"Erro interno: {e}"}, status=500)
     
+    # Se o método não for GET nem POST
+    return JsonResponse({"status": "erro", "mensagem": "Método de requisição não permitido."}, status=405)
+
 
 def gerenciar_dispositivos(request, device_name=None): # device_name agora pode ser None para a URL base
     dispositivos = Dispositivo.objects.all().order_by('nome')
@@ -417,8 +449,8 @@ def device_dashboard(request):
     }
     return render(request, 'iot_core/device_dashboard.html', context)
 
-# View para adicionar um novo dispositivo IoT
 
+# View para adicionar um novo dispositivo IoT
 @require_POST
 def add_device(request):
     form = DispositivoForm(request.POST) # Usa DispositivoForm
@@ -443,6 +475,7 @@ def add_device(request):
                 
     return redirect('device_dashboard')
 
+
 # View para remover um dispositivo IoT
 @require_POST
 def delete_device(request, device_id): # device_id aqui é a PK do Dispositivo
@@ -451,6 +484,7 @@ def delete_device(request, device_id): # device_id aqui é a PK do Dispositivo
     device.delete()
     messages.info(request, f'Dispositivo "{device_name}" removido.')
     return redirect('device_dashboard')
+
 
 # View para enviar comando ON/OFF
 @require_POST
@@ -477,7 +511,7 @@ def send_command(request):
         ComandoPendente.objects.create(
             dispositivo=device,
             comando=comando_para_esp,
-            data_execucao_agendada=datetime.now(), # Agora mesmo, para ser pego rapidamente
+            data_execucao_agendada=timezone.now(), # Agora mesmo, para ser pego rapidamente
             status='AGENDADO',
             is_master_repetitive=False # Este não é um comando repetitivo mestre
         )
@@ -502,6 +536,7 @@ def send_command(request):
     except Exception as e:
         logger.exception(f"Erro geral na view send_command ao agendar comando: {e}")
         return JsonResponse({'status': 'error', 'message': str(e)}, status=500)
+
 
 # NOVA View: Endpoint para o ESP8266 buscar comandos pendentes
 def get_device_command(request, device_name):
@@ -540,7 +575,9 @@ def get_device_command(request, device_name):
         logger.exception(f"Erro ao buscar comandos para {device_name}: {e}")
         return JsonResponse({'status': 'erro', 'message': str(e)}, status=500)
 
+
 # NOVA View: Endpoint para o ESP8266 atualizar o status de um comando
+@csrf_exempt
 @require_POST
 def update_command_status(request):
     try:
@@ -559,7 +596,7 @@ def update_command_status(request):
             return JsonResponse({'status': 'erro', 'message': 'Status inválido.'}, status=400)
 
         command_obj.status = status_msg
-        command_obj.data_execucao_real = datetime.now() # Atualiza a hora da execução real
+        command_obj.data_execucao_real = timezone.now() # Atualiza a hora da execução real
         command_obj.save()
 
         # Opcional: Atualizar o DeviceState e logar se for um comando de LIGAR/DESLIGAR AR
@@ -604,4 +641,3 @@ def receive_sensor_data(request):
             return JsonResponse({'status': 'error', 'message': 'JSON inválido'}, status=400)
     return JsonResponse({'status': 'error', 'message': 'Método não permitido'}, status=405)
 
-# ... (Suas outras views)
